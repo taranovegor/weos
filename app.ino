@@ -2,9 +2,8 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_PCD8544.h>
 #include <MsTimer2.h>
-#include <Encoder.h>
 
-Adafruit_PCD8544 display = Adafruit_PCD8544(8, 4, 5, 6, 7);
+Adafruit_PCD8544 display = Adafruit_PCD8544(3, 4, 5, 6, 7);
 
 int seconds;
 int minutes;
@@ -14,7 +13,10 @@ int months;
 int year;
 
 const int pin_A = 2;
-const int pin_B = 3;
+const int pin_B = 8;
+unsigned char encoder_A;
+unsigned char encoder_B;
+unsigned char encoder_A_prev=0;
 
 int stuck;
 int menu_level;
@@ -22,7 +24,6 @@ int menu_level;
 int currentTime;
 int loopTime;
 int test;
-Encoder digitalEncoder(2, 3);
 int posEnc = 0;
 int nposEnc;
 
@@ -105,7 +106,8 @@ void setup(){
 	display.clearDisplay();
 	display.setContrast(60);
 	display.display();
-
+pinMode(pin_A, INPUT);
+  pinMode(pin_B, INPUT);
 	//Инциализируем порты
 	pinMode(10, OUTPUT);
 	pinMode(11, OUTPUT);
@@ -113,13 +115,13 @@ void setup(){
 	digitalWrite(11, HIGH);
 
 	//
-	currentTime = millis()/100;
+	currentTime = millis()/10;
 	loopTime = currentTime;
 }
 
 void loop(){
 	display.clearDisplay();
-	currentTime = millis()/100;
+	currentTime = millis()/10;
 
 	if(digitalRead(10)==HIGH&&stuck==0||digitalRead(11)==HIGH&&stuck==0){
 		stuck=1;
@@ -130,15 +132,29 @@ void loop(){
 		stuck=0;
 		menu_level=0;
 	}
-	if(currentTime >= (loopTime + 5)){
-
+	if(currentTime >= (loopTime + 8)){
+		encoder_A = digitalRead(pin_A);
+		encoder_B = digitalRead(pin_B);
+		if((!encoder_A) && (encoder_A_prev)){
+			if(encoder_B){
+				test++;
+			}
+			if(encoder_A){
+				test=0;
+			}
+		}
+		display.print("f");
+		encoder_A_prev = encoder_A;
+		loopTime = currentTime;
 	}
 
 	display.print(loopTime);
 	display.setCursor(2,10);
-	display.print("|-|");
+	display.print(currentTime);
 	display.setCursor(2,20);
 	display.print(test);
 	display.setCursor(2,30);
+	display.print(encoder_A);
+	display.print(encoder_B);
 	display.display();
 }
