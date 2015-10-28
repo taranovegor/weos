@@ -4,7 +4,7 @@
 #include <MsTimer2.h>
 
 Adafruit_PCD8544 display = Adafruit_PCD8544(3, 4, 5, 6, 7);
-
+//21/34
 int seconds;
 int minutes;
 int hours;
@@ -12,46 +12,25 @@ int days;
 int months;
 int year;
 
-const int pin_A = 2;
-const int pin_B = 8;
-unsigned char encoder_A;
-unsigned char encoder_B;
-unsigned char encoder_A_prev=0;
+long currentTime;
+long loopTime;
 
-int stuck;
-int menu_level;
+//Пины портов
+const int back = 11;//red
+const int forward = 10;//green
+const int up = 8;//yellow
+const int down = 9;//blue
 
-int currentTime;
-int loopTime;
-int test;
-int posEnc = 0;
-int nposEnc;
+int dev_mode = 0;
 
 void secadd() {
 	seconds++;
 }
 
-char* menu_points[] = {"Часы","Экран","Устройство"};
-
-int menu_prev[] = {};
-
-void header(){
-	display.drawFastHLine(0,9,LCDWIDTH,BLACK);
-	display.fillRect(70, 3, 12, 5, BLACK);
-	display.fillRect(71, 4, 3, 3, WHITE);
-	display.drawFastVLine(69, 4, 3, BLACK);
-	display.setCursor(2,1);
-	display.print(menu_points[2]);
-
-	display.setCursor(2,12);
-	display.print("ПО тест");
-	display.setCursor(2,21);
-	display.print("Дисплей N5110");
-	display.setCursor(2,30);
-	display.print("Обновлено");
-	display.setCursor(2,39);
-	display.print("24 Окт 21:52");//17
-}
+const char* menu_points[] = {"Часы","Экран","Устройство"};
+int menu_level = 0;
+int menu_point = 0;
+int ml_array[16];
 
 int date(int arg){
 	//Если секунд больше 59, аннулируем переменную seconds и добавим минуту
@@ -89,14 +68,48 @@ int date(int arg){
 	return retstr[arg];
 }
 
-void setup(){
-	seconds = 10;
-	minutes = 10;
-	hours = 22;
-	days = 23;
-	months = 10;
-	year = 2015;
+void bAction(){
+	if(digitalRead(up)==LOW&&currentTime >= (loopTime + 5)){
+		loopTime = currentTime;
+		if(menu_point<=0||menu_level==0){
+			return;
+		}
 
+		menu_point--;
+	}
+	if(digitalRead(down)==LOW&&currentTime >= (loopTime + 5)){
+		loopTime = currentTime;
+		if(menu_level==0){
+			return;
+		}
+
+		menu_point++;
+	}
+	if(digitalRead(forward)==LOW&&currentTime >= (loopTime + 5)){
+		loopTime = currentTime;
+
+		if(menu_level>0){
+			ml_array[menu_level] = menu_point;
+		}
+		menu_level++;
+		menu_point=0;
+	}
+	if(digitalRead(back)==LOW&&currentTime >= (loopTime + 5)){
+		loopTime = currentTime;
+		if(menu_level<=0){
+			return;
+		}
+
+		ml_array[menu_level] = 0;
+		menu_level--;
+		menu_point = ml_array[menu_level];
+	}
+}
+
+char* printMenu(){
+}
+
+void setup(){
 	//Прерывания по таймеру, добавление секунды
 	MsTimer2::set(993, secadd);
 	MsTimer2::start();
@@ -106,55 +119,70 @@ void setup(){
 	display.clearDisplay();
 	display.setContrast(60);
 	display.display();
-pinMode(pin_A, INPUT);
-  pinMode(pin_B, INPUT);
-	//Инциализируем порты
-	pinMode(10, OUTPUT);
-	pinMode(11, OUTPUT);
-	digitalWrite(10, HIGH);
-	digitalWrite(11, HIGH);
 
-	//
-	currentTime = millis()/10;
+	//Инциализируем порты
+	pinMode(back, INPUT);
+	pinMode(forward, INPUT);
+	pinMode(up, INPUT);
+	pinMode(down, INPUT);
+	digitalWrite(back, HIGH);
+	digitalWrite(forward, HIGH);
+	digitalWrite(up, HIGH);
+	digitalWrite(down, HIGH);
+
+	//Включение devmode | Зажать кнопки возрата и подтверждения
+	if(digitalRead(back)==LOW&&digitalRead(forward)==LOW){
+		dev_mode = 1;
+	}
+
+	currentTime = millis()/100;
 	loopTime = currentTime;
+
 }
 
 void loop(){
+	currentTime = millis()/100;
+	bAction();
 	display.clearDisplay();
-	currentTime = millis()/10;
-
-	if(digitalRead(10)==HIGH&&stuck==0||digitalRead(11)==HIGH&&stuck==0){
-		stuck=1;
-	}
-
-
-	if(digitalRead(11)==LOW&&stuck==1){
-		stuck=0;
-		menu_level=0;
-	}
-	if(currentTime >= (loopTime + 8)){
-		encoder_A = digitalRead(pin_A);
-		encoder_B = digitalRead(pin_B);
-		if((!encoder_A) && (encoder_A_prev)){
-			if(encoder_B){
-				test++;
-			}
-			if(encoder_A){
-				test=0;
-			}
-		}
-		display.print("f");
-		encoder_A_prev = encoder_A;
-		loopTime = currentTime;
-	}
-
-	display.print(loopTime);
-	display.setCursor(2,10);
-	display.print(currentTime);
-	display.setCursor(2,20);
-	display.print(test);
-	display.setCursor(2,30);
-	display.print(encoder_A);
-	display.print(encoder_B);
+	display.print("mp");
+	display.print(menu_point);
+	display.print("mv");
+	display.print(menu_level);
+	display.setCursor(0,8);
+	display.print(ml_array[0]);
+	display.print("-");
+	display.print(ml_array[1]);
+	display.print("-");
+	display.print(ml_array[2]);
+	display.print("-");
+	display.print(ml_array[3]);
+	display.print("-");
+	display.print(ml_array[4]);
+	display.print("-");
+	display.print(ml_array[5]);
+	display.print("-");
+	display.print(ml_array[6]);
+	display.print("-");
+	//display.print(ml_array[7]);
+	//display.print("-");
+	//display.print(ml_array[8]);
+	//display.print("-");
+	//display.print(ml_array[9]);
+	//display.print("-");
+	//display.print(ml_array[10]);
+	display.print("0");
+	display.print("-");
+	display.print("1");
+	display.print("-");
+	display.print("2");
+	display.print("-");
+	display.print("3");
+	display.print("-");
+	display.print("4");
+	display.print("-");
+	display.print("5");
+	display.print("-");
+	display.print("6");
+	display.print("-");
 	display.display();
 }
