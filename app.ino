@@ -238,6 +238,7 @@ void loop(){
 		//Правая ножка x1 y1 x2 y2 -6x1x2
 		lcd.drawLine(69,90,72,93,WHITE);
 		*/
+		/*WORKED**********************************************/
 		/*lcd.drawRoundRect(64,82,10,10,5,WHITE);
 		lcd.drawFastHLine(66,86,3,WHITE);
 		lcd.drawFastVLine(69,83,4,WHITE);
