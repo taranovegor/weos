@@ -46,27 +46,45 @@ unsigned int numWeekDay;
 unsigned int month;
 unsigned int year;
 
-unsigned int minuteFixed = 99;
-unsigned int hourFixed = 99;
+unsigned int minuteFixed = 0;
+unsigned int hourFixed = 0;
+unsigned int dayFixed = 0;
 
 boolean printDates = false;
 
 int devMode = 0;
 
+//Инциализация меню
+
+char* MenuName[3];
+
+int MenuType[3];
+
+int MenuParent[3];
+
+int MenuChildFirst[3];
+
+int MenuChildLast[3];
+
 void MenuSetup(){
-	/*
-	MenuNames[]=;
-	MenuTypeCode[]=;
-	MenuValue[]=;
-	MenuParent[]=;
-	MenuChildFirst[]=;
-	MenuChildEnd[]=;
-	*/
+	MenuNames[0]="";
+	MenuType[0]=0;
+	MenuParent[0]=0;
+	MenuChildFirst[0]=0;
+	MenuChildLast[0]=0;
 }
 
 void timerSeconds() {
 	seconds++;
 }
+
+static uint8_t conv2d(const char* p) {
+  uint8_t v = 0;
+  if ('0' <= *p && *p <= '9') v = *p - '0';
+  return 10 * v + *++p - '0';
+}
+
+int menu_level = 0;
 
 unsigned int date(int arg){
 	//Если секунд больше 59, аннулируем переменную seconds и добавим минуту
@@ -111,9 +129,89 @@ unsigned int date(int arg){
 const char* namesDays[] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
 const char* namesMonths[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
+void (){
+	//lcd.drawFastHLine(24,95,128, RED);
+	//lcd.drawFastHLine(24,33,128, RED);
+	if(date(2)!=dayFixed||printDates==false){
+		lcd.clearScreen();
+		//width symbols (3)== 34px
+		lcd.setTextSize(2);
+		lcd.setCursor(70,34);//6232
+		lcd.print(namesDays[date(3)-1]);
+		lcd.setCursor(70,50);
+		lcd.print(date(2));
+		lcd.setCursor(70,66);
+		lcd.print(namesMonths[date(1)-1]);
+		//Обновляем переменные
+		dayFixed=date(2);//
+		printDates=false;//Костыль заканчивается в минутах
+	}
+	if(date(4)!=hourFixed||printDates==false){
+		lcd.setTextSize(4);
+		lcd.setTextColor(BLACK);
+
+		lcd.setCursor(24,34);//x,32-true-pos
+		if(date(4)<10&&date(4)!=0){
+			lcd.setCursor(48,34);
+			if(hourFixed!=99){
+				lcd.print(hourFixed);
+			}
+		}
+		else if(date(4)==10){
+			lcd.print("09");
+		}
+		else{
+			lcd.print(hourFixed);
+		}
+
+		hourFixed = date(4);
+		//Рисуем новую часы
+		lcd.setTextColor(WHITE);
+		lcd.setCursor(24,34);//x,32-true-pos
+		//Переместить setCursor в 1 блок if (?)!!!
+		if(date(4)<10){
+			lcd.print("0");
+		}
+		lcd.print(date(4));
+	}
+	if(date(5)!=minuteFixed||printDates==false){
+		lcd.setTextSize(4);
+		lcd.setTextColor(BLACK);
+		lcd.setCursor(24,67);//x,66-true-pos
+		//width symbols(2) == 44px
+		if(date(5)<10&&date(5)!=0){
+			lcd.setCursor(48,67);
+			/*На циферблате есть баг
+			когда число 99 перекрывает
+			какую-то часть месяца, поэтому
+			блок с отображением месяца
+			стоит в конце. стоит учесть*/
+			if(minuteFixed!=99){
+				lcd.print(minuteFixed);
+			}
+		}
+		else if(date(5)==10){
+			lcd.print("09");
+		}
+		else{
+			lcd.print(minuteFixed);
+		}
+
+		minuteFixed = date(5);
+		//Рисуем новые минуты
+		lcd.setTextColor(WHITE);
+		lcd.setCursor(24,67);
+		if(date(5)<10){
+			lcd.print("0");
+		}
+		lcd.print(date(5));
+		printDates=true;
+	}
+}
+
 void setup(){
 	//initialization timer for clock
-	MsTimer2::set(993, timerSeconds);//993-12mHz
+	MsTimer2::set(993, timerSeconds);//993-12mHz OR 16mHz i dont know
 	MsTimer2::start();
 
 	lcd.begin();
@@ -133,128 +231,17 @@ void setup(){
 		devMode = 1;
 
 	}
-	seconds=55;
-	minutes=28;
-	hours=18;
-	day=28;
-	numWeekDay=6;
-	month=12;
+	seconds=conv2d(__TIME__ + 6)+8;
+	minutes=conv2d(__TIME__ + 3);
+	hours=conv2d(__TIME__);
+	day=29;
+	numWeekDay=7;
+	month=11;
 	year=2015;
 }
 
 void loop(){
+	if(MenuType[MenuNowPos]==0){
 
-	/*lcd.setTextColor(WHITE);
-	lcd.setTextSize(4);
-	lcd.setCursor(16,30);//x,32
-	lcd.print("22");
-	lcd.setCursor(16,64);//x,66
-	lcd.print("15");
-	//24
-	lcd.setTextSize(2);
-	lcd.setCursor(62,30);
-	lcd.print(namesDays[date(3)-1]);//14
-	lcd.setCursor(62,46);
-	lcd.print(date(2));
-	lcd.setCursor(62,62);
-	lcd.print(namesMonths[date(1)-1]);*/
-
-	if(date(4)==0&&date(5)==0&&date(6)==0&&printDates==true){
-		printDates=false;
 	}
-	if(date(4)!=hourFixed){
-		lcd.setTextSize(4);
-		lcd.setTextColor(BLACK);
-
-		lcd.setCursor(16,32);//x,32-true-pos
-		if(date(4)<10&&date(4)!=0){
-			lcd.setCursor(40,32);
-			lcd.print(hourFixed);
-		}
-		else if(date(4)==10){
-			lcd.print("09");
-		}
-		else{
-			lcd.print(hourFixed);
-		}
-
-		hourFixed = date(4);
-		//Рисуем новую часы
-		lcd.setTextColor(WHITE);
-		lcd.setCursor(16,32);//x,32-true-pos
-		if(date(4)<10){
-			lcd.print("0");
-		}
-		lcd.print(date(4));
-	}
-	if(date(5)!=minuteFixed){
-		lcd.setTextSize(4);
-		lcd.setTextColor(BLACK);
-		lcd.setCursor(16,66);//x,66-true-pos
-
-		if(date(5)<10&&date(5)!=0){
-			lcd.setCursor(40,66);
-			/*На циферблате есть баг
-			когда число 99 перекрывает
-			какую-то часть месяца, поэтому
-			блок с отображением месяца
-			стоит в конце. стоит учесть*/
-			lcd.print(minuteFixed);
-		}
-		else if(date(5)==10){
-			lcd.print("09");
-		}
-		else{
-			lcd.print(minuteFixed);
-		}
-
-		minuteFixed = date(5);
-		//Рисуем новые минуты
-		lcd.setTextColor(WHITE);
-		lcd.setCursor(16,66);
-		if(date(5)<10){
-			lcd.print("0");
-		}
-		lcd.print(date(5));
-	}
-	if(printDates==false){
-		lcd.setTextSize(2);
-		lcd.setCursor(62,32);
-		lcd.print(namesDays[date(3)-1]);
-		lcd.setCursor(62,48);
-		lcd.print(date(2));
-		lcd.setCursor(62,64);
-		lcd.print(namesMonths[date(1)-1]);
-		/*
-		lcd.drawRoundRect(62,82,10,10,5,WHITE);
-		lcd.drawFastHLine(64,86,3,WHITE);
-		lcd.drawFastVLine(67,83,4,WHITE);
-		//Левое ухо
-		lcd.drawLine(61,93-10,64,80, WHITE);
-		//Правое ухо
-		lcd.drawLine(69,90-10,72,83,WHITE);
-		//Левая ножка
-		lcd.drawLine(61,93,64,90, WHITE);
-		//Правая ножка x1 y1 x2 y2 -6x1x2
-		lcd.drawLine(69,90,72,93,WHITE);
-		*/
-		/*WORKED**********************************************/
-		/*lcd.drawRoundRect(64,82,10,10,5,WHITE);
-		lcd.drawFastHLine(66,86,3,WHITE);
-		lcd.drawFastVLine(69,83,4,WHITE);
-		//x1 y1 x2 y2
-		//Левое ухо
-		lcd.drawLine(63,93-10,66,80, WHITE);
-		//Правое ухо
-		lcd.drawLine(71,90-10,74,83,WHITE);
-		//Левая ножка
-		lcd.drawLine(63,93,66,90, WHITE);
-		//Правая ножка
-		lcd.drawLine(71,90,74,93,WHITE);*/
-		printDates=true;
-	}
-	//
-	//	*
-	// *  *
-	//*******
 }
