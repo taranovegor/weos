@@ -1,22 +1,23 @@
 #include <SPI.h>
 #include <TFT_ILI9163C.h>
 #include <MsTimer2.h>
+#include <EEPROM.h>
 //#include <MemoryFree.h>
 
 // Color's
 #define	BLACK   0x0000
 #define	BLUE    0x001F
 #define	RED     0xF800
-#define	GREEN   0x07E0
-#define CYAN    0x07FF
-#define MAGENTA 0xF81F
-#define YELLOW  0xFFE0
+//#define	GREEN   0x07E0
+//#define CYAN    0x07FF
+//#define MAGENTA 0xF81F
+//#define YELLOW  0xFFE0
 #define WHITE   0xFFFF
 
 // Pin's
 //buttons
-#define down 0
-#define up 1
+#define down 5
+#define up 7
 #define ok 2
 #define back 4
 //other
@@ -37,6 +38,9 @@ __RST - 4
 
 TFT_ILI9163C lcd = TFT_ILI9163C(__CS, __DC, __RST);
 
+
+long currentTime;
+long loopTime;
 //
 unsigned int seconds;
 unsigned int minutes;
@@ -56,22 +60,109 @@ int devMode = 0;
 
 //Инциализация меню
 
-char* MenuName[3];
+char* MenuName[14];
 
-int MenuType[3];
+//MenuType = 0;// - циферблат
+//MenuType = 1;// - меню
+int MenuType[14];
 
-int MenuParent[3];
+int MenuParent[14];
 
-int MenuChildFirst[3];
+int MenuChildFirst[14];
 
-int MenuChildLast[3];
+int MenuChildLast[14];
+
+unsigned int MenuLevel = 0;
+unsigned int MenuCurPos = 0;////MenuCurrentPos
+
+unsigned int backlightAddress = 20;
+byte brightness;
 
 void MenuSetup(){
-	MenuNames[0]="";
+	//Циферблат
+	MenuName[0]="";
 	MenuType[0]=0;
 	MenuParent[0]=0;
-	MenuChildFirst[0]=0;
-	MenuChildLast[0]=0;
+	MenuChildFirst[0]=1;
+	MenuChildLast[0]=1;
+
+	MenuName[1]="Menu";
+	MenuType[1]=1;
+	MenuParent[1]=0;
+	MenuChildFirst[1]=2;
+	MenuChildLast[1]=5;
+
+	/*MenuName[]="";
+	MenuType[]=;
+	MenuParent[]=;
+	MenuChildFirst[]=;
+	MenuChildLast[]=;*/
+	MenuName[2]="Clock";
+	MenuType[2]=1;
+	MenuParent[2]=1;
+	MenuChildFirst[2]=6;
+	MenuChildLast[2]=8;
+
+	MenuName[3]="Screen";
+	MenuType[3]=1;
+	MenuParent[3]=1;
+	MenuChildFirst[3]=0;
+	MenuChildLast[3]=0;
+
+	MenuName[4]="Bluetooth";
+	MenuType[4]=1;
+	MenuParent[4]=1;
+	MenuChildFirst[4]=0;
+	MenuChildLast[4]=0;
+
+	MenuName[5]="Device";
+	MenuType[5]=1;
+	MenuParent[5]=1;
+	MenuChildFirst[5]=9;
+	MenuChildLast[5]=10;
+
+	MenuName[6]="Alarm";
+	MenuType[6]=1;
+	MenuParent[6]=2;
+	MenuChildFirst[6]=0;
+	MenuChildLast[6]=0;
+
+	MenuName[7]="Time";
+	MenuType[7]=1;
+	MenuParent[7]=2;
+	MenuChildFirst[7]=0;
+	MenuChildLast[7]=0;
+
+	MenuName[8]="//Reserv";
+	MenuType[8]=1;
+	MenuParent[8]=2;
+	MenuChildFirst[8]=0;
+	MenuChildLast[8]=0;
+
+	MenuName[9]="Reboot";
+	MenuType[9]=1;
+	MenuParent[9]=5;
+	MenuChildFirst[9]=0;
+	MenuChildLast[9]=0;
+
+	MenuName[10]="Information";
+	MenuType[10]=1;
+	MenuParent[10]=5;
+	MenuChildFirst[10]=0;
+	MenuChildLast[10]=0;
+}
+
+void DrawMenu(){
+	lcd.setTextSize(2);
+	int menuCursorPos=1;//Позиция курсора в принте меню
+	for(int i=MenuChildFirst[MenuLevel];i<MenuChildLast[MenuLevel]+1;i++){
+		lcd.setCursor(3,menuCursorPos);
+		menuCursorPos=menuCursorPos+16;//Если надумаю ставить название меню просто поменять принт и сложение местами
+		lcd.print(MenuName[i]);
+	}
+	lcd.drawFastVLine(0,MenuCurPos*16-16,16,BLACK);
+	lcd.drawFastVLine(0,MenuCurPos*16+16,16,BLACK);
+	lcd.drawFastVLine(0,MenuCurPos*16,16,WHITE);
 }
 
 void timerSeconds() {
@@ -83,8 +174,6 @@ static uint8_t conv2d(const char* p) {
   if ('0' <= *p && *p <= '9') v = *p - '0';
   return 10 * v + *++p - '0';
 }
-
-int menu_level = 0;
 
 unsigned int date(int arg){
 	//Если секунд больше 59, аннулируем переменную seconds и добавим минуту
@@ -129,7 +218,7 @@ unsigned int date(int arg){
 const char* namesDays[] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
 const char* namesMonths[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
-void (){
+void DigitalClockFace(){
 	//lcd.drawFastHLine(24,95,128, RED);
 	//lcd.drawFastHLine(24,33,128, RED);
 	if(date(2)!=dayFixed||printDates==false){
@@ -153,9 +242,7 @@ void (){
 		lcd.setCursor(24,34);//x,32-true-pos
 		if(date(4)<10&&date(4)!=0){
 			lcd.setCursor(48,34);
-			if(hourFixed!=99){
-				lcd.print(hourFixed);
-			}
+			lcd.print(hourFixed);
 		}
 		else if(date(4)==10){
 			lcd.print("09");
@@ -186,9 +273,7 @@ void (){
 			какую-то часть месяца, поэтому
 			блок с отображением месяца
 			стоит в конце. стоит учесть*/
-			if(minuteFixed!=99){
-				lcd.print(minuteFixed);
-			}
+			lcd.print(minuteFixed);
 		}
 		else if(date(5)==10){
 			lcd.print("09");
@@ -209,13 +294,27 @@ void (){
 	}
 }
 
+/*void printCenter(char* string, int margintop, int size, byte color){
+	lcd.setTextColor(color);
+	lcd.setTextSize(size);
+	lcd.setCursor(((128-(strlen(string)*(size*7)-2))/2)-1,margintop);
+	lcd.print(string);
+}*/
+
+void(* resetFunc) (void) = 0;
+
 void setup(){
 	//initialization timer for clock
 	MsTimer2::set(993, timerSeconds);//993-12mHz OR 16mHz i dont know
 	MsTimer2::start();
 
+	//EEPROM READ
+	//EEPROM.write(backlightAddress, 50);
+	brightness = EEPROM.read(backlightAddress);
+
+
 	lcd.begin();
-	analogWrite(backlight, 50);
+	analogWrite(backlight, brightness);
 	//Pin's MODE initialization
 	pinMode(down, OUTPUT);
 	pinMode(up, OUTPUT);
@@ -229,19 +328,84 @@ void setup(){
 
 	if(digitalRead(back)==LOW&&digitalRead(ok)==LOW){
 		devMode = 1;
-
 	}
-	seconds=conv2d(__TIME__ + 6)+8;
+
+	MenuSetup();
+
+	seconds=conv2d(__TIME__ + 6)+6;
 	minutes=conv2d(__TIME__ + 3);
 	hours=conv2d(__TIME__);
-	day=29;
-	numWeekDay=7;
-	month=11;
+	//seconds=45;
+	//minutes=29;
+	//hours=6;
+	day=3;
+	numWeekDay=4;
+	month=12;
 	year=2015;
+
+	currentTime = millis()/100;
+	loopTime = currentTime;
+	MenuLevel=0;
+	minuteFixed=date(5);
+	hourFixed=date(4);
 }
+//lcd.drawCircle(64,42,32,WHITE);
 
 void loop(){
-	if(MenuType[MenuNowPos]==0){
+	date(6);
+	currentTime = millis()/100;
+	if(currentTime>=(loopTime+600)&&MenuLevel>0){
+		loopTime=currentTime;
+		lcd.clearScreen();
+		printDates=false;
+		MenuLevel=0;
+		MenuCurPos=0;
+	}
+	if(digitalRead(ok)==LOW&&currentTime>=(loopTime+5)){
+		loopTime=currentTime;
+		MenuLevel=MenuChildFirst[MenuLevel]+MenuCurPos;
+		lcd.clearScreen();
+		MenuCurPos=0;
+	}
+	if(digitalRead(back)==LOW&&currentTime>=(loopTime+5)&&MenuLevel!=0){
+		loopTime=currentTime;
+		MenuCurPos=MenuParent[MenuLevel];
+		MenuLevel=MenuParent[MenuLevel];
+		lcd.clearScreen();
+		printDates=false;
+	}
 
+	if(digitalRead(up)==LOW&&currentTime>=(loopTime+5)&&MenuLevel!=0){
+		loopTime=currentTime;
+		MenuCurPos--;
+	}
+	if(digitalRead(down)==LOW&&currentTime>=(loopTime+5)&&MenuLevel!=0){
+		loopTime=currentTime;
+		MenuCurPos++;
+	}
+	if(MenuType[MenuLevel]==0){
+		/*lcd.setCursor(0,0);
+		lcd.setTextSize(1);
+		lcd.print(MenuCurPos);*/
+		DigitalClockFace();
+	}
+	if(MenuType[MenuLevel]!=0){
+		DrawMenu();
+	}
+	if(MenuName[MenuLevel]=="Reboot"){
+		analogWrite(backlight, 0);
+		resetFunc();
+	}
+	if(MenuName[MenuLevel]=="Information"){
+		lcd.print("alo");
+	}
+	if(date(4)>=22&&date(5)>=30){
+		analogWrite(backlight, 10);
+	}
+	else if(date(4)<=6&&date(5)<30){
+		analogWrite(backlight, 10);
+	}
+	else{
+		analogWrite(backlight, 50);
 	}
 }
