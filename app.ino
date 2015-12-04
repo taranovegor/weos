@@ -219,127 +219,140 @@ const char* namesDays[] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
 const char* namesMonths[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
 void DigitalClockFace(){
-	//lcd.drawFastHLine(24,95,128, RED);
-	//lcd.drawFastHLine(24,33,128, RED);
-	if(date(2)!=dayFixed||printDates==false){
+	if(date(2)!=dayFixed){
+		printDates=false;
+	}
+	if(printDates==false){
 		lcd.clearScreen();
-		//width symbols (3)== 34px
-		lcd.setTextSize(2);
-		lcd.setCursor(70,34);//6232
-		lcd.print(namesDays[date(3)-1]);
-		lcd.setCursor(70,50);
-		lcd.print(date(2));
-		lcd.setCursor(70,66);
-		lcd.print(namesMonths[date(1)-1]);
-		//Обновляем переменные
-		dayFixed=date(2);//
-		printDates=false;//Костыль заканчивается в минутах
 	}
 	if(date(4)!=hourFixed||printDates==false){
+		//Устанавливаем размер текста 4 для даты
 		lcd.setTextSize(4);
+
 		lcd.setTextColor(BLACK);
 
-		lcd.setCursor(24,34);//x,32-true-pos
+		lcd.setCursor(24,34);
 		if(date(4)<10&&date(4)!=0){
+			/*Если дата(часы) меньше 10,
+			2 (x) блоке |1x| меняем удаляем
+			прошлое значение
+			@Ноль не обновляется!!!*/
 			lcd.setCursor(48,34);
 			lcd.print(hourFixed);
 		}
 		else if(date(4)==10){
+			/*Если дата(часы) равна 10,
+			рисуем 09, так как так легче
+			очистить блок 1 и 2
+			@Ноль удаляется!!!*/
 			lcd.print("09");
 		}
 		else{
+			/*Если дата(часы) равна остальным значениям
+			то рисуем прошлое значение в двух блоках
+			@Ноль не существует в 1 блоке!!!*/
 			lcd.print(hourFixed);
 		}
-
+		//Обновляем переменную
 		hourFixed = date(4);
-		//Рисуем новую часы
 		lcd.setTextColor(WHITE);
-		lcd.setCursor(24,34);//x,32-true-pos
-		//Переместить setCursor в 1 блок if (?)!!!
+		lcd.setCursor(24,34);
 		if(date(4)<10){
 			lcd.print("0");
 		}
 		lcd.print(date(4));
 	}
 	if(date(5)!=minuteFixed||printDates==false){
+		//Устанавливаем размер текста 4 для даты
 		lcd.setTextSize(4);
+
 		lcd.setTextColor(BLACK);
-		lcd.setCursor(24,67);//x,66-true-pos
-		//width symbols(2) == 44px
+
+		lcd.setCursor(24,67);
 		if(date(5)<10&&date(5)!=0){
+			/*Если дата(минуты) меньше 10,
+			2 (x) блоке |1x| меняем удаляем
+			прошлое значение
+			@Ноль не обновляется!!!*/
 			lcd.setCursor(48,67);
-			/*На циферблате есть баг
-			когда число 99 перекрывает
-			какую-то часть месяца, поэтому
-			блок с отображением месяца
-			стоит в конце. стоит учесть*/
 			lcd.print(minuteFixed);
 		}
 		else if(date(5)==10){
+			/*Если дата(минуты) равна 10,
+			рисуем 09, так как так легче
+			очистить блок 1 и 2
+			@Ноль удаляется!!!*/
 			lcd.print("09");
 		}
 		else{
+			/*Если дата(минуты) равна остальным значениям
+			то рисуем прошлое значение в двух блоках
+			@Ноль не существует в 1 блоке!!!*/
 			lcd.print(minuteFixed);
 		}
-
+		//Обновляем переменную
 		minuteFixed = date(5);
-		//Рисуем новые минуты
 		lcd.setTextColor(WHITE);
 		lcd.setCursor(24,67);
 		if(date(5)<10){
 			lcd.print("0");
 		}
 		lcd.print(date(5));
+	}
+	if(date(2)!=dayFixed||printDates==false){
+		lcd.setTextSize(2);
+		//День недели
+		lcd.setCursor(70,34);
+		lcd.print(namesDays[date(3)-1]);
+		//День месяца
+		lcd.setCursor(70,50);
+		lcd.print(date(2));
+		//Месяц
+		lcd.setCursor(70,66);
+		lcd.print(namesMonths[date(1)-1]);
+		//Обновляем переменную
+		dayFixed=date(2);
 		printDates=true;
 	}
 }
 
-/*void printCenter(char* string, int margintop, int size, byte color){
-	lcd.setTextColor(color);
-	lcd.setTextSize(size);
-	lcd.setCursor(((128-(strlen(string)*(size*7)-2))/2)-1,margintop);
-	lcd.print(string);
-}*/
-
+//Функция рестарта
 void(* resetFunc) (void) = 0;
 
 void setup(){
-	//initialization timer for clock
-	MsTimer2::set(993, timerSeconds);//993-12mHz OR 16mHz i dont know
+	//Таймер часов
+	MsTimer2::set(993, timerSeconds);//993-16mHz
 	MsTimer2::start();
-
-	//EEPROM READ
-	//EEPROM.write(backlightAddress, 50);
+	//EEPROM, чтение
 	brightness = EEPROM.read(backlightAddress);
-
-
+	//Инциализация экрана
 	lcd.begin();
-	analogWrite(backlight, brightness);
-	//Pin's MODE initialization
+	analogWrite(backlight, brightness);//Устанавливаем яркость
+	//Установка мода пинов
 	pinMode(down, OUTPUT);
 	pinMode(up, OUTPUT);
 	pinMode(ok, OUTPUT);
 	pinMode(back, OUTPUT);
-	//step2
+	//Статус
 	digitalWrite(down, HIGH);
 	digitalWrite(up, HIGH);
 	digitalWrite(ok, HIGH);
 	digitalWrite(back, HIGH);
-
+	//DevMode включение при зажатии кнопки back и ok
 	if(digitalRead(back)==LOW&&digitalRead(ok)==LOW){
 		devMode = 1;
 	}
-
+	//Инциализация меню
 	MenuSetup();
-
-	seconds=conv2d(__TIME__ + 6)+6;
-	minutes=conv2d(__TIME__ + 3);
-	hours=conv2d(__TIME__);
-	//seconds=45;
-	//minutes=29;
-	//hours=6;
-	day=3;
-	numWeekDay=4;
+	//Установка времени (онли PC)
+	//seconds=conv2d(__TIME__ + 6)+6;
+	//minutes=conv2d(__TIME__ + 3);
+	//hours=conv2d(__TIME__);
+	seconds=45;
+	minutes=59;
+	hours=23;
+	day=4;
+	numWeekDay=5;
 	month=12;
 	year=2015;
 
@@ -348,6 +361,7 @@ void setup(){
 	MenuLevel=0;
 	minuteFixed=date(5);
 	hourFixed=date(4);
+	dayFixed=date(2);
 }
 //lcd.drawCircle(64,42,32,WHITE);
 
@@ -391,21 +405,5 @@ void loop(){
 	}
 	if(MenuType[MenuLevel]!=0){
 		DrawMenu();
-	}
-	if(MenuName[MenuLevel]=="Reboot"){
-		analogWrite(backlight, 0);
-		resetFunc();
-	}
-	if(MenuName[MenuLevel]=="Information"){
-		lcd.print("alo");
-	}
-	if(date(4)>=22&&date(5)>=30){
-		analogWrite(backlight, 10);
-	}
-	else if(date(4)<=6&&date(5)<30){
-		analogWrite(backlight, 10);
-	}
-	else{
-		analogWrite(backlight, 50);
 	}
 }
