@@ -2,6 +2,7 @@
 #include <TFT_ILI9163C.h>
 #include <MsTimer2.h>
 #include <EEPROM.h>
+#include "_fonts/defaultFont.c"
 //#include <MemoryFree.h>
 
 // Color's
@@ -36,12 +37,14 @@ __RST - 4
 #define __DC  6
 #define __RST 8
 
+//Установка пинов для экрана
 TFT_ILI9163C lcd = TFT_ILI9163C(__CS, __DC, __RST);
 
-
+/*Переменные*/
+/**Для работы с таймерами**/
 long currentTime;
 long loopTime;
-//
+/**Для работы с временем, датой**/
 unsigned int seconds;
 unsigned int minutes;
 unsigned int hours;
@@ -49,36 +52,53 @@ unsigned int day;
 unsigned int numWeekDay;
 unsigned int month;
 unsigned int year;
-
+/**Для работы с циферблатом**/
 unsigned int minuteFixed = 0;
 unsigned int hourFixed = 0;
 unsigned int dayFixed = 0;
+/**Для отображения дат, месяца**/
+const char* namesDays[] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
+const char* namesMonths[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
-boolean printDates = false;
+/**Переменные для работы с EEPROM**/
+//Адресса EEPROM
+unsigned int brightnessAddress = 20;//Адресс яркости экрана
+unsigned int backlightTimerAddress = 21;//Адресс таймера подс.
+//Байты, если нужно сохранить данные
+byte brightness;//Яркость экрана по дефолту, задаётся юзером
+/**Для работы с экраном**/
+//таймер подсветки
+unsigned int backlightTimer;
 
-int devMode = 0;
+/**Прочее**/
+boolean devMode = false;//Деволперский режим
+boolean printDates = false;//Спец.переменная для работы с датами
+boolean sleepMode = false;
 
-//Инциализация меню
-
-char* MenuName[14];
-
+/**Переменные для работы меню**/
+char* MenuName[14];//Имя меню
 //MenuType = 0;// - циферблат
 //MenuType = 1;// - меню
-int MenuType[14];
+int MenuType[14];//Тип меню
+int MenuParent[14];//Родитель меню
+int MenuChildFirst[14];//Первый потомок
+int MenuChildLast[14];//Последний потомок
+/**Переменные для работы навигации в меню**/
+unsigned int MenuLevel = 0;//Уровень меню (от ok, back)
+unsigned int MenuCurPos = 0;//Текущее положение курсора (от up, down)
+unsigned int MenuPrevPos = 0;//Текущее положение курсора (от up, down)
 
-int MenuParent[14];
+/*Функции*/
 
-int MenuChildFirst[14];
-
-int MenuChildLast[14];
-
-unsigned int MenuLevel = 0;
-unsigned int MenuCurPos = 0;////MenuCurrentPos
-
-unsigned int backlightAddress = 20;
-byte brightness;
-
+/**Заполнение массива меню**/
 void MenuSetup(){
+	/*
+	MenuName[]="";
+	MenuType[]=;
+	MenuParent[]=;
+	MenuChildFirst[]=;
+	MenuChildLast[]=;
+	*/
 	//Циферблат
 	MenuName[0]="";
 	MenuType[0]=0;
@@ -92,11 +112,6 @@ void MenuSetup(){
 	MenuChildFirst[1]=2;
 	MenuChildLast[1]=5;
 
-	/*MenuName[]="";
-	MenuType[]=;
-	MenuParent[]=;
-	MenuChildFirst[]=;
-	MenuChildLast[]=;*/
 	MenuName[2]="Clock";
 	MenuType[2]=1;
 	MenuParent[2]=1;
@@ -152,6 +167,7 @@ void MenuSetup(){
 	MenuChildLast[10]=0;
 }
 
+/**Рисование меню**/
 void DrawMenu(){
 	lcd.setTextSize(2);
 	int menuCursorPos=1;//Позиция курсора в принте меню
@@ -165,16 +181,19 @@ void DrawMenu(){
 	lcd.drawFastVLine(0,MenuCurPos*16,16,WHITE);
 }
 
+/**Добавление секунд (для MsTimer2)**/
 void timerSeconds() {
 	seconds++;
 }
 
+/**Установка времени**/
 static uint8_t conv2d(const char* p) {
   uint8_t v = 0;
   if ('0' <= *p && *p <= '9') v = *p - '0';
   return 10 * v + *++p - '0';
 }
 
+/**Передача, подсчёт дат**/
 unsigned int date(int arg){
 	//Если секунд больше 59, аннулируем переменную seconds и добавим минуту
 	if(seconds>59){
@@ -215,15 +234,22 @@ unsigned int date(int arg){
 	return retstr[arg];
 }
 
-const char* namesDays[] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
-const char* namesMonths[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-
+/**Рисование циферблата**/
 void DigitalClockFace(){
-	if(date(2)!=dayFixed){
-		printDates=false;
-	}
-	if(printDates==false){
+	if(date(2)!=dayFixed||printDates==false){
 		lcd.clearScreen();
+		lcd.setTextSize(2);
+		//День недели
+		lcd.setCursor(70,34);
+		lcd.print(namesDays[date(3)-1]);
+		//День месяца
+		lcd.setCursor(70,50);
+		lcd.print(date(2));
+		//Месяц
+		lcd.setCursor(70,66);
+		lcd.print(namesMonths[date(1)-1]);
+		//Обновляем переменную
+		dayFixed=date(2);
 	}
 	if(date(4)!=hourFixed||printDates==false){
 		//Устанавливаем размер текста 4 для даты
@@ -298,25 +324,11 @@ void DigitalClockFace(){
 			lcd.print("0");
 		}
 		lcd.print(date(5));
-	}
-	if(date(2)!=dayFixed||printDates==false){
-		lcd.setTextSize(2);
-		//День недели
-		lcd.setCursor(70,34);
-		lcd.print(namesDays[date(3)-1]);
-		//День месяца
-		lcd.setCursor(70,50);
-		lcd.print(date(2));
-		//Месяц
-		lcd.setCursor(70,66);
-		lcd.print(namesMonths[date(1)-1]);
-		//Обновляем переменную
-		dayFixed=date(2);
 		printDates=true;
 	}
 }
 
-//Функция рестарта
+/**Функция рестарта**/
 void(* resetFunc) (void) = 0;
 
 void setup(){
@@ -324,9 +336,12 @@ void setup(){
 	MsTimer2::set(993, timerSeconds);//993-16mHz
 	MsTimer2::start();
 	//EEPROM, чтение
-	brightness = EEPROM.read(backlightAddress);
+	//EEPROM.write(backlightTimer, 1);
+	brightness=EEPROM.read(brightnessAddress);
+	backlightTimer=EEPROM.read(backlightTimer)*60*10*10;
 	//Инциализация экрана
 	lcd.begin();
+	lcd.setFont(&defaultFont);
 	analogWrite(backlight, brightness);//Устанавливаем яркость
 	//Установка мода пинов
 	pinMode(down, OUTPUT);
@@ -340,70 +355,85 @@ void setup(){
 	digitalWrite(back, HIGH);
 	//DevMode включение при зажатии кнопки back и ok
 	if(digitalRead(back)==LOW&&digitalRead(ok)==LOW){
-		devMode = 1;
+		devMode = true;
 	}
 	//Инциализация меню
 	MenuSetup();
 	//Установка времени (онли PC)
-	//seconds=conv2d(__TIME__ + 6)+6;
-	//minutes=conv2d(__TIME__ + 3);
-	//hours=conv2d(__TIME__);
-	seconds=45;
-	minutes=59;
-	hours=23;
-	day=4;
-	numWeekDay=5;
-	month=12;
+	seconds=conv2d(__TIME__ + 6)+6;
+	minutes=conv2d(__TIME__ + 3);
+	hours=12;
+	//seconds=45;
+	//minutes=59;
+	//hours=23;
+	day=14;
+	numWeekDay=1;
+	month=12;//7
 	year=2015;
-
-	currentTime = millis()/100;
-	loopTime = currentTime;
-	MenuLevel=0;
+	//Установка фикс. дат
 	minuteFixed=date(5);
 	hourFixed=date(4);
-	dayFixed=date(2);
+	//dayFixed=date(2);
+	//Установка значений для таймеров
+	currentTime = millis()/100;
+	/*1sec = 1000ms
+	1000/10=10ps
+	5-пол секунды
+	10-секунда*/
+	loopTime = currentTime;
 }
-//lcd.drawCircle(64,42,32,WHITE);
 
 void loop(){
-	date(6);
+	//Обновляем текущее время
 	currentTime = millis()/100;
-	if(currentTime>=(loopTime+600)&&MenuLevel>0){
+	//Затрагиваем функцию date для подсчёта, так как иногда теряет секунды в меню
+	date(0);//Год
+	//Очищение диспления из за бездействия
+	if(currentTime>=loopTime+backlightTimer&&sleepMode==false){
 		loopTime=currentTime;
-		lcd.clearScreen();
+		sleepMode=true;
+		analogWrite(backlight, 0);
+		lcd.sleepMode(true);
+	}
+	if(digitalRead(ok)==LOW||digitalRead(back)==LOW||digitalRead(up)==LOW||digitalRead(down)==LOW&&sleepMode==true){
+		sleepMode=false;
+		lcd.sleepMode(false);
+		analogWrite(backlight, brightness);
+	}
+
+
+	if(currentTime>=loopTime+600&&MenuLevel>0){
+		loopTime=currentTime;
 		printDates=false;
 		MenuLevel=0;
 		MenuCurPos=0;
 	}
-	if(digitalRead(ok)==LOW&&currentTime>=(loopTime+5)){
+	if(digitalRead(ok)==LOW&&currentTime>=loopTime+5){
 		loopTime=currentTime;
 		MenuLevel=MenuChildFirst[MenuLevel]+MenuCurPos;
 		lcd.clearScreen();
-		MenuCurPos=0;
 	}
-	if(digitalRead(back)==LOW&&currentTime>=(loopTime+5)&&MenuLevel!=0){
+	if(digitalRead(back)==LOW&&currentTime>=loopTime+5){
 		loopTime=currentTime;
-		MenuCurPos=MenuParent[MenuLevel];
+		MenuCurPos=MenuPrevPos;
 		MenuLevel=MenuParent[MenuLevel];
-		lcd.clearScreen();
-		printDates=false;
-	}
-
-	if(digitalRead(up)==LOW&&currentTime>=(loopTime+5)&&MenuLevel!=0){
-		loopTime=currentTime;
-		MenuCurPos--;
-	}
-	if(digitalRead(down)==LOW&&currentTime>=(loopTime+5)&&MenuLevel!=0){
-		loopTime=currentTime;
-		MenuCurPos++;
 	}
 	if(MenuType[MenuLevel]==0){
-		/*lcd.setCursor(0,0);
-		lcd.setTextSize(1);
-		lcd.print(MenuCurPos);*/
 		DigitalClockFace();
+		lcd.setCursor(0,0);
+		lcd.setTextSize(1);
+		lcd.print("test");
 	}
-	if(MenuType[MenuLevel]!=0){
+	else{
 		DrawMenu();
 	}
+	/*if(date(4)>22&&sleepMode==false){
+		analogWrite(backlight, 20);
+	}
+	else if(date(4)<7&&sleepMode==false){
+		analogWrite(backlight, 20);
+	}
+	else{
+		analogWrite(backlight, brightness);
+	}*/
 }
