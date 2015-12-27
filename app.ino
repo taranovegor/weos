@@ -1,144 +1,53 @@
+
 #include <SPI.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_PCD8544.h>
 #include <MsTimer2.h>
+#include <TFT_ILI9163C.h>
+#include "_fonts/mono_mid.c"
 
-Adafruit_PCD8544 display = Adafruit_PCD8544(3, 4, 5, 6, 7);
+/*Цвета*/
+#define	BLACK 0x0000
+#define	RED   0xF800//debug
+#define WHITE 0xFFFF
+/*
+VCC GND CS RST A0 SDA SCK LED
+---|LCD pin's
+__CS - 10	__SDA 11
+__DC - 6	__SCK 13
+__RST - 8   __LED 9
+*/
+#define __CS 10
+#define __DC 6
+#define __RST 8
 
+/*Установка пинов для экрана*/
+TFT_ILI9163C lcd = TFT_ILI9163C(__CS, __DC, __RST);
+
+/*Для работы с временем, датой*/
 int seconds;
 int minutes;
 int hours;
-int days;
-int months;
-int year;
+unsigned int day;
+unsigned int numWeekDay;
+unsigned int month;
+unsigned int year;
+/*Для работы с циферблатом, фикс даты*/
+byte minuteFixed = 0;
+byte hourFixed = 0;
+byte dayFixed = 0;
+/*Для отображения дат, месяца в буквах*/
+const char* namesDays[] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
+const char* namesMonths[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+const int daysinMonths[13] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+/*Прочее*/
+boolean printDates = false;//Спец.переменная для работы с датами
 
-long currentTime;
-long loopTime;
-
-//Пины портов
-const int back = 11;//red
-const int forward = 10;//green
-const int up = 8;//yellow
-const int down = 9;//blue
-
-int dev_mode = 0;
-
-//Переменные для меню
-//Меню заголовки
-char* MenuName[16];
-//Тип меню, редакт или нет
-int MenuType[16];
-//Родитель меню
-int MenuParent[16];
-//Дети меню, в зависисмости от MenuCurPos - зависит и чей он родитель
-//Пример MenuChilds[] = {1,3,15,4};
-//макс значение пока что 3 (5110 lcd)
-int MenuChildMin[16];
-int MenuChildMax[16];
-
-//
-int curMenu;
-//Текущая позиция в меню (Menu Current Position)
-int MenuCurPos = 0;
-//Статус меню, актив изменение - нет
-int MenuStatus = 0;
-//Максимальная позиция курсора
-int maxPos = 3;
-
-void MenuSetup(){
-
-	MenuName[1]="Menu";
-	MenuType[1]=0;
-	MenuParent[1]=0;
-	MenuChildMin[1]=2;
-	MenuChildMax[1]=4;
-
-	MenuName[2]="Часы";
-	MenuType[2]=0;
-	MenuParent[2]=1;
-	MenuChildMin[2]=5;
-	MenuChildMax[2]=7;
-
-	MenuName[3]="Экран";
-	MenuType[3]=0;
-	MenuParent[3]=1;
-	MenuChildMin[3]=8;
-	MenuChildMax[3]=10;
-
-	MenuName[4]="Прочее";
-	MenuType[4]=0;
-	MenuParent[4]=1;
-	MenuChildMin[4]=0;
-	MenuChildMax[4]=0;
-
-	MenuName[5]="Будильник";
-	MenuType[5]=0;
-	MenuParent[5]=2;
-	MenuChildMin[5]=0;
-	MenuChildMax[5]=0;
-
-	MenuName[6]="Часы";
-	MenuType[6]=0;
-	MenuParent[6]=2;
-	MenuChildMin[6]=0;
-	MenuChildMax[6]=0;
-
-	MenuName[7]="Циферблат";
-	MenuType[7]=0;
-	MenuParent[7]=2;
-	MenuChildMin[7]=0;
-	MenuChildMax[7]=0;
-
-	MenuName[8]="Яркость";
-	MenuType[8]=0;
-	MenuParent[8]=0;
-	MenuChildMin[8]=0;
-	MenuChildMax[8]=0;
-
-	MenuName[9]="Подсветка";
-	MenuType[9]=0;
-	MenuParent[9]=0;
-	MenuChildMin[9]=0;
-	MenuChildMax[9]=0;
-
-	MenuName[10]="Контраст";
-	MenuType[10]=0;
-	MenuParent[10]=0;
-	MenuChildMin[10]=0;
-	MenuChildMax[10]=0;
-
-	MenuName[11]="Устройство";
-	MenuType[11]=0;
-	MenuParent[11]=0;
-	MenuChildMin[11]=0;
-	MenuChildMax[11]=0;
-
-	MenuName[12]="Перезагрузка";
-	MenuType[12]=0;
-	MenuParent[12]=0;
-	MenuChildMin[12]=0;
-	MenuChildMax[12]=0;
-
-}
-
-void printMenu(){
-	display.setCursor(2,1);
-	display.print(MenuName[curMenu]);
-	display.drawFastVLine(0, (8*MenuCurPos), 9, BLACK);
-	for(int i = MenuChildMin[curMenu]; i<MenuChildMax[curMenu]+1; i++){
-		int b;
-		b++;
-		display.setCursor(2,8*b);
-		display.print(MenuName[i]);
-	}
-}
-
-
-void secadd() {
+/*Добавление секунд (для MsTimer2)*/
+void timerSeconds() {
 	seconds++;
 }
 
-int date(int arg){
+/*Передача, подсчёт дат*/
+unsigned int time(int arg){
 	//Если секунд больше 59, аннулируем переменную seconds и добавим минуту
 	if(seconds>59){
 		seconds=0;
@@ -152,91 +61,149 @@ int date(int arg){
 	//Если часов > 23, тогда аннулируем переменную hours и добавим день
 	if(hours>23){
 		hours=0;
-		days++;
+		day++;
+		numWeekDay++;
 	}
 	//Добавляем массив с количеством дней в месяце, ноль для того что бы небыло мороки с отсётом месяцев с нуля (0-11 вместо 1-12)
-	const int daysinMonths[13] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+//перемещено
 	//Если день > количества дней в месяц [текущий], обнуляем days и добавляем месяц
 	//Вводит в ступор инциализация месяца, разобрать нужно
-	if(days>daysinMonths[months]){
-		days=1;
-		months++;
+	if(day>daysinMonths[month]||day==0){
+		day=1;
+		month++;
+	}
+	if(numWeekDay>7||numWeekDay==0){
+		numWeekDay=1;
 	}
 	//Если месяц > 12, аннулируем months до 1 и добавляем год
-	if(months>12){
-		months=1;
+	if(month>12||month==0){
+		month=1;
 		year++;
 	}
-	//Готовим (на печи) строку для возращения
-	//year = 0 months = 1 days = 2 hours = 3 minutes = 4 seconds = 5
-	int retstr[] = {year, months, days, hours, minutes, seconds};
+	//Готовим строку для возращения
+	//year = 0 months = 1 days = 2 numWeekDay = 3 hours = 4 minutes = 5 seconds = 6
+	if(arg==0){
+		return year;
+	}
+	else if(arg==1){
+		return month;
+	}
+	else if(arg==2){
+		return day;
+	}
+	else if(arg==3){
+		return numWeekDay;
+	}
+	else if(arg==4){
+		return hours;
+	}
+	else if(arg==5){
+		return minutes;
+	}
+	else if(arg==6){
+		return seconds;
+	}
+	//int retstr[] = {year, month, day, numWeekDay, hours, minutes, seconds};
 	//Возращаем строку
-	return retstr[arg];
+	//return retstr[arg];
 }
 
-void bAction(){
-	if(digitalRead(forward)==LOW&&currentTime>=(loopTime+5)){
-		loopTime=currentTime;
-		curMenu++;
+void DigitalClockFace(){
+	//Правая колонка
+	if(time(2)!=dayFixed||printDates==false){
+		printDates=false;
+		lcd.clearScreen();
+		lcd.setTextSize(2);
+		//lcd.setTextColor(WHITE);
+		//День недели
+		lcd.setCursor(70,32);
+		lcd.print(namesDays[time(3)-1]);
+		//День месяца
+		lcd.setCursor(70,48);
+		lcd.print(time(2));
+		//Месяц
+		lcd.setCursor(70,64);
+		lcd.print(namesMonths[time(1)-1]);
+		//Обновляем переменную
+		dayFixed=time(2);
 	}
-	if(digitalRead(down)==LOW&&currentTime>=(loopTime+5)){
-		loopTime=currentTime;
-		MenuCurPos++;
+	//Часы
+	if(time(4)!=hourFixed||printDates==false){
+		//
+		lcd.setTextSize(4);
+		lcd.setTextColor(BLACK);
+		lcd.setCursor(24,30);
+		if(time(4)<10&&time(4)!=0){
+			lcd.setCursor(48,30);
+			lcd.print(hourFixed);
+		}
+		else if(time(4)==10){
+			lcd.print("09");
+		}
+		else{
+			lcd.print(hourFixed);
+		}
+		hourFixed=time(4);
+		lcd.setTextColor(WHITE);
+		lcd.setCursor(24,30);
+		if(time(4)<10){
+			lcd.print("0");
+		}
+		lcd.print(time(4));
 	}
-	if(digitalRead(up)==LOW&&currentTime>=(loopTime+5)){
-		loopTime=currentTime;
-		MenuCurPos--;
+	//Минуты
+	if(time(5)!=minuteFixed||printDates==false){
+		lcd.setTextSize(4);
+		lcd.setTextColor(BLACK);
+		lcd.setCursor(24,63);
+		if(time(5)<10&&time(5)!=0){
+			lcd.setCursor(48,63);
+			lcd.print(minuteFixed);
+		}
+		else if(time(5)==10){
+			lcd.print("09");
+		}
+		else{
+			lcd.print(minuteFixed);
+		}
+		minuteFixed=time(5);
+		lcd.setTextColor(WHITE);
+		lcd.setCursor(24,63);
+		if(time(5)<10){
+			lcd.print("0");
+		}
+		lcd.print(time(5));
+		if(printDates==false){
+			printDates=true;
+		}
 	}
 }
 
 void setup(){
-	//Прерывания по таймеру, добавление секунды
-	MsTimer2::set(993, secadd);
+	/*Таймер часов*/
+	MsTimer2::set(993, timerSeconds);//993-16mHz
 	MsTimer2::start();
+	/*чтение EEPROM*/
+	analogWrite(9, 50);//backlight
+	//backlightTimer=EEPROM.read(backlightTimer)*60*10*10;
+	/*Инциализация экрана*/
+	lcd.begin();
+	lcd.setFont(&mono_mid);
 
-	//serial!
-	Serial.begin(9600);
-
-
-	//Инциализируем дисплей
-	display.begin();
-	display.clearDisplay();
-	display.setContrast(60);
-	display.display();
-
-	//Инциализируем порты
-	pinMode(back, INPUT);
-	pinMode(forward, INPUT);
-	pinMode(up, INPUT);
-	pinMode(down, INPUT);
-	digitalWrite(back, HIGH);
-	digitalWrite(forward, HIGH);
-	digitalWrite(up, HIGH);
-	digitalWrite(down, HIGH);
-
-	//Включение devmode | Зажать кнопки возрата и подтверждения
-	if(digitalRead(back)==LOW&&digitalRead(forward)==LOW){
-		dev_mode = 1;
-	}
-
-	currentTime = millis()/100;
-	loopTime = currentTime;
-
-	curMenu=1;
-
-	MenuSetup();
+	seconds=50;
+	minutes=59;
+	hours=23;
+	hours = 23;
+	day=3;
+	numWeekDay=3;
+	month=3;
+	year=2015;
+	/*fix-dates*/
+	minuteFixed=time(5);
+	hourFixed=time(4);
+	dayFixed=time(2);
 }
 
 void loop(){
-	currentTime = millis()/100;
-	bAction();
-	display.clearDisplay();
-	display.print(date(3));
-	display.print(":");
-	display.print(date(4));
-	display.print(":");
-	display.print(date(5));
-	Serial.println(Serial.read(), DEC);
-	//printMenu();
-	display.display();
+	DigitalClockFace();
 }
