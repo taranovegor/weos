@@ -17,3 +17,7 @@
 https://github.com/taranovegor/weos/assets/16158349/05251f07-be00-4cd9-bf24-31a290842292
 
 https://github.com/taranovegor/weos/assets/16158349/f1aebaae-9b56-4743-8954-748e8aefd78f
+
+`28 Dec 2015`
+![2015-12-28 22:06:22.jpg](IMG_20151228_220622_HDR.jpg)
+![2015-12-28 22:06:50.jpg](IMG_20151228_220650_HDR.jpg)
