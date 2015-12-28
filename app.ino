@@ -1,5 +1,5 @@
 /*
-weOS ROM 0.3.0
+weOS ROM 0.4.0
 Board: Arduino UNO
 LCD: ILI9163C 1.44" 128x128
 время до очищения дисплея добавить!!!
@@ -67,12 +67,12 @@ TFT_ILI9163C lcd = TFT_ILI9163C(__CS, __DC, __RST);
 unsigned int currentTime;
 unsigned int loopTime;
 /*Для работы с временем, датой*/
-byte seconds;
-int minutes;
-int hours;
-unsigned int day;
-unsigned int numWeekDay;
-unsigned int month;
+volatile byte seconds;
+byte minutes;
+byte hours;
+byte day;
+byte numWeekDay;
+byte month;
 unsigned int year;
 /*Для работы с циферблатом, фикс даты*/
 byte minuteFixed = 0;
@@ -81,34 +81,34 @@ byte dayFixed = 0;
 /*Для отображения дат, месяца в буквах (хех)*/
 const char* namesDays[] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
 const char* namesMonths[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-const int daysinMonths[13] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+const byte daysinMonths[13] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 /*Для работы с будильником*/
 //unsigned int vibrationCycle;
-const unsigned int vibrationMode[] = {100, 125, 150, 175, 200, 225, 250};
+const byte vibrationMode[] = {100, 125, 150, 175, 200, 225, 250};
 
 /*Переменные для работы с EEPROM (память)*/
 /*Адреса*/
 //Дата
-const int minuteAddress = 1;
-const int hourAddress = 2;
-const int dayAddress = 3;
-const int numWeekDayAddress = 4;
-const int monthAddress = 5;
-const int yearAddress = 6;
+const byte minuteAddress = 1;
+const byte hourAddress = 2;
+const byte dayAddress = 3;
+const byte numWeekDayAddress = 4;
+const byte monthAddress = 5;
+const byte yearAddress = 6;
 //Циферблат
-const int clockFaceTypeAddress = 7;
+const byte clockFaceTypeAddress = 7;
 //const int noname reserv = 8;
 //Экран
-const int brightnessAddress = 9;
-const int backlightTimerAddress = 10;
+const byte brightnessAddress = 9;
+const byte backlightTimerAddress = 10;
 //const int noname reserv = 11;
 //const int noname reserv = 12;
 //Будильник (AC-AlarmClock)
-const int ACMinute = 13;
-const int ACHour = 14;
-const int ACDay = 15;
-const int ACDaysWeek = 16;
-const int ACRepetition = 17;
+const byte ACMinute = 13;
+const byte ACHour = 14;
+const byte ACDay = 15;
+const byte ACDaysWeek = 16;
+const byte ACRepetition = 17;
 //const int noname reserv = 18;
 /*Байты для сохранения данных EEPROM*/
 //...
@@ -117,8 +117,8 @@ byte brightness;
 byte backlightTimer;
 //...
 /*Для работы с настройками*/
-int settingStep;
-int currentPer;
+byte settingStep;
+byte currentPer;
 int fixedSetNum;//Фиксированная цифра настроек (для удаление прошлой)
 
 /*Прочее*/
@@ -133,14 +133,14 @@ char* MenuName[14];//Имя меню
 //MenuType = 0;// - циферблат
 //MenuType = 1;// - стандартное меню с дочерними элементами
 //MenuType = 2;// - элементы БЕЗ дочерних элементов
-int MenuType[14];//Тип меню
-int MenuParent[14];//Родитель меню
-int MenuChildFirst[14];//Первый потомок
-int MenuChildLast[14];//Последний потомок
+unsigned int MenuType[14];//Тип меню
+unsigned int MenuParent[14];//Родитель меню
+unsigned int MenuChildFirst[14];//Первый потомок
+unsigned int MenuChildLast[14];//Последний потомок
 /**Переменные для работы навигации в меню**/
 unsigned int MenuLevel = 0;//Уровень меню (от ok, back)
-int MenuCurPos = 0;//Текущее положение курсора (от up, down)
-unsigned int MenuPrevPos = 0;//Текущее положение курсора (от up, down)
+byte MenuCurPos = 0;//Текущее положение курсора (от up, down)
+//unsigned byte MenuPrevPos = 0;//Текущее положение курсора (от up, down)
 
 /*Заполнение массива меню*/
 void MenuSetup(){
@@ -219,7 +219,7 @@ void MenuSetup(){
 	MenuChildLast[10]=0;
 
 	MenuName[11]="Backlight";
-	MenuType[11]=5;
+	MenuType[11]=4;
 	MenuParent[11]=3;
 	//MenuChildFirs1110]=;
 	//MenuChildLas1110]=;
@@ -237,9 +237,18 @@ void MenuSetup(){
 	MenuChildLast[13]=0;
 }
 
+boolean pressed(byte button){
+	if(analogRead(button)==0){
+		return true;
+	}
+	else{
+		return false;
+	}
+}
+
 void DrawMenu(){
 	lcd.setTextSize(2);
-	int menuCursorPos=1;//Позиция курсора в принте меню
+	byte menuCursorPos=1;//Позиция курсора в принте меню
 	for(int i=MenuChildFirst[MenuLevel];i<MenuChildLast[MenuLevel]+1;i++){
 		lcd.setCursor(3,menuCursorPos);
 		menuCursorPos=menuCursorPos+16;//Если надумаю ставить название меню просто поменять принт и сложение местами
@@ -365,7 +374,7 @@ void timerSeconds() {
 }
 
 /*Передача, подсчёт дат*/
-unsigned int time(int arg){
+unsigned int time(byte arg){
 	//Если секунд больше 59, аннулируем переменную seconds и добавим минуту
 	if(seconds>59){
 		seconds=0;
@@ -400,26 +409,21 @@ unsigned int time(int arg){
 	}
 	//Готовим (на печи) строку для возращения
 	//year = 0 months = 1 days = 2 numWeekDay = 3 hours = 4 minutes = 5 seconds = 6
-	if(arg==0){
-		return year;
-	}
-	else if(arg==1){
-		return month;
-	}
-	else if(arg==2){
-		return day;
-	}
-	else if(arg==3){
-		return numWeekDay;
-	}
-	else if(arg==4){
-		return hours;
-	}
-	else if(arg==5){
-		return minutes;
-	}
-	else if(arg==6){
-		return seconds;
+	switch(arg){
+		case 0:
+			return year;
+		case 1:
+			return month;
+		case 2:
+			return day;
+		case 3:
+			return numWeekDay;
+		case 4:
+			return hours;
+		case 5:
+			return minutes;
+		case 6:
+			return seconds;
 	}
 	//int retstr[] = {year, month, day, numWeekDay, hours, minutes, seconds};
 	//Возращаем строку
@@ -533,7 +537,6 @@ void setup(){
 	//backlightTimer=EEPROM.read(backlightTimer)*60*10*10;
 	/*Инциализация экрана*/
 	lcd.begin();
-	lcd.setBitrate(2);
 	lcd.setFont(&defaultFont);
 	/*Установка типа пинов*/
 	//Аналоговые
@@ -595,7 +598,7 @@ void loop(){
 		lcd.clearScreen();
 	}
 	//Действие при нажатии на ok/back
-	if(analogRead(ok)==0&&currentTime>=loopTime+5){
+	if(pressed(ok)&&currentTime>=loopTime+5){
 		loopTime=currentTime;
 		renderingStatics=false;
 		switch(MenuType[MenuLevel]){
@@ -613,7 +616,6 @@ void loop(){
 					MenuLevel=MenuParent[MenuLevel];
 				}
 				break;
-
 			case 6:
 				settingStep++;
 				if(settingStep>2){
@@ -635,6 +637,13 @@ void loop(){
 		loopTime=currentTime;
 		renderingStatics=false;
 		switch(MenuType[MenuLevel]){
+			case 5:
+				settingStep--;
+				if(settingStep<0){
+					settingStep=0;
+					MenuCurPos=MenuLevel-MenuChildFirst[MenuParent[MenuLevel]];
+					MenuLevel=MenuParent[MenuLevel];
+				}
 			case 6:
 				settingStep--;
 				if(settingStep<0){
@@ -659,7 +668,7 @@ void loop(){
 		switch(MenuType[MenuLevel]){
 			case 1:
 				MenuCurPos--;
-				if(MenuCurPos<0){
+				if(MenuCurPos==255){
 					MenuCurPos=MenuChildLast[MenuLevel]-MenuChildFirst[MenuLevel];
 				}
 				lcd.drawFastVLine(0,0,128,BLACK);
@@ -765,7 +774,7 @@ void loop(){
 					case 0:
 						fixedSetNum=hours;
 						hours--;
-						if(hours<0){
+						if(hours==255){
 							hours=23;
 						}
 						lcd.setTextColor(BLACK);
@@ -779,8 +788,8 @@ void loop(){
 					case 1:
 						fixedSetNum=minutes;
 						minutes--;
-						if(hours<0){
-							hours=59;
+						if(minutes==255){
+							minutes=59;
 						}
 						lcd.setTextColor(BLACK);
 						lcd.setCursor(68,50);
@@ -865,11 +874,11 @@ void loop(){
 			lcd.setCursor(2,16);
 			lcd.print("OS version");
 			lcd.setCursor(2,32);
-			lcd.print("0.3 alpha");
+			lcd.print("0.4.0 alpha");
 			lcd.setCursor(2,48);
 			lcd.print("SOC");
 			lcd.setCursor(2,64);
-			lcd.print("ATmega328p");
+			lcd.print("ATmea328p");
 			lcd.setCursor(2,80);
 			lcd.print("Free RAM");
 			lcd.setCursor(2,96);
