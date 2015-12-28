@@ -1,5 +1,5 @@
 /*
-weOS ROM 0.4.0
+weOS ROM 0.5.0
 Board: Arduino UNO
 LCD: ILI9163C 1.44" 128x128
 время до очищения дисплея добавить!!!
@@ -140,7 +140,7 @@ unsigned int MenuChildLast[14];//Последний потомок
 /**Переменные для работы навигации в меню**/
 unsigned int MenuLevel = 0;//Уровень меню (от ok, back)
 byte MenuCurPos = 0;//Текущее положение курсора (от up, down)
-//unsigned byte MenuPrevPos = 0;//Текущее положение курсора (от up, down)
+byte TimerButton;
 
 /*Заполнение массива меню*/
 void MenuSetup(){
@@ -219,7 +219,7 @@ void MenuSetup(){
 	MenuChildLast[10]=0;
 
 	MenuName[11]="Backlight";
-	MenuType[11]=4;
+	MenuType[11]=5;
 	MenuParent[11]=3;
 	//MenuChildFirs1110]=;
 	//MenuChildLas1110]=;
@@ -239,6 +239,16 @@ void MenuSetup(){
 
 boolean pressed(byte button){
 	if(analogRead(button)==0){
+		return true;
+	}
+	else{
+		return false;
+	}
+}
+
+boolean buttonDelay(byte delay){
+	if(currentTime>=loopTime+delay){
+		loopTime=currentTime;
 		return true;
 	}
 	else{
@@ -424,6 +434,8 @@ unsigned int time(byte arg){
 			return minutes;
 		case 6:
 			return seconds;
+		case 255:
+			break;
 	}
 	//int retstr[] = {year, month, day, numWeekDay, hours, minutes, seconds};
 	//Возращаем строку
@@ -582,110 +594,108 @@ void setup(){
 void loop(){
 	//Обновляем текущее время
 	currentTime = millis()/100;
-	//Затрагиваем функцию time для обновления, так как иногда видимо в меню пропускается
-	//AlarmClock();
-	//Выход из меню, если небыло действий на протяжении 600мс
-	if(currentTime>=loopTime+600&&MenuLevel>0){
-		loopTime=currentTime;
-		printDates=false;
-		MenuLevel=0;
-		MenuCurPos=0;
-		switch(MenuType[MenuLevel]){
-			case 4:
-				brightness=EEPROM.read(brightnessAddress);
-				break;
-		}
-		lcd.clearScreen();
+	//Затрагиваем time(255) так как иногда в меню терялась дата
+	time(255);
+	//Таймер кнопки, где 10 - секунда
+	switch(MenuType[MenuLevel]){
+		case 4:
+			TimerButton = 3;
+		case 5:
+			TimerButton = 3;
+		case 6:
+			TimerButton = 3;
+		default:
+			TimerButton = 5;
+			break;
 	}
-	//Действие при нажатии на ok/back
-	if(pressed(ok)&&currentTime>=loopTime+5){
-		loopTime=currentTime;
+	//Обработка кнопок
+	if(pressed(ok)&&buttonDelay(TimerButton)){
 		renderingStatics=false;
 		switch(MenuType[MenuLevel]){
-			case 4:
+			case 4://Яркость
 				EEPROM.write(brightnessAddress, brightness);
 				MenuCurPos=MenuLevel-MenuChildFirst[MenuParent[MenuLevel]];
 				MenuLevel=MenuParent[MenuLevel];
 				break;
-			case 5:
+			case 5://Часы, минуты
 				settingStep++;
 				if(settingStep>1){
-					EEPROM.write(minuteAddress, minutes);//День недели
-					EEPROM.write(hourAddress, hours);//День месяца
-					settingStep=0;
+					EEPROM.write(minuteAddress, minutes);
+					EEPROM.write(hourAddress, hours);
+					MenuCurPos=MenuLevel-MenuChildFirst[MenuParent[MenuLevel]];
 					MenuLevel=MenuParent[MenuLevel];
+					settingStep=0;
 				}
 				break;
-			case 6:
+			case 6://Дата
 				settingStep++;
 				if(settingStep>2){
-					EEPROM.write(numWeekDayAddress, numWeekDay);//День недели
-					EEPROM.write(dayAddress, day);//День месяца
-					EEPROM.write(monthAddress, month);//Mесяц
-					settingStep=0;
+					//Заносим все даты в переменные (день недели, день, месяц);
+					EEPROM.write(numWeekDayAddress, numWeekDay);
+					EEPROM.write(dayAddress, day);
+					EEPROM.write(monthAddress, month);
+					MenuCurPos=MenuLevel-MenuChildFirst[MenuParent[MenuLevel]];
 					MenuLevel=MenuParent[MenuLevel];
+					settingStep=0;
 				}
 				break;
-			default:
+			default://Если не удовлетворяет (обычное меню)
 				MenuLevel=MenuChildFirst[MenuLevel]+MenuCurPos;
 				MenuCurPos=0;
 				break;
 		}
 		lcd.clearScreen();
 	}
-	if(analogRead(back)==0&&MenuLevel!=0&&currentTime>=loopTime+5){
-		loopTime=currentTime;
+	if(pressed(back)&&buttonDelay(TimerButton)){
 		renderingStatics=false;
 		switch(MenuType[MenuLevel]){
-			case 5:
+			case 5://Часы, минуты
 				settingStep--;
-				if(settingStep<0){
-					settingStep=0;
+				if(settingStep==255){//255 так как byte 0-1=255
 					MenuCurPos=MenuLevel-MenuChildFirst[MenuParent[MenuLevel]];
 					MenuLevel=MenuParent[MenuLevel];
+					settingStep=0;
 				}
+				break;
 			case 6:
 				settingStep--;
-				if(settingStep<0){
-					settingStep=0;
+				if(settingStep==255){//255 так как byte 0-1=255
 					MenuCurPos=MenuLevel-MenuChildFirst[MenuParent[MenuLevel]];
 					MenuLevel=MenuParent[MenuLevel];
+					settingStep=0;
 				}
 				break;
 			default:
 				MenuCurPos=MenuLevel-MenuChildFirst[MenuParent[MenuLevel]];
 				MenuLevel=MenuParent[MenuLevel];
-				if(MenuLevel==0){//Если после обновления menulevel = 0, тогда обн. принт
+				if(MenuLevel==0){
 					printDates=false;
 				}
 				break;
 		}
 		lcd.clearScreen();
 	}
-	//Действие при нажатии на up/down
-	if(analogRead(up)==0&&currentTime>=loopTime+5){
-		loopTime=currentTime;
+	if(pressed(up)&&buttonDelay(TimerButton)){
 		switch(MenuType[MenuLevel]){
-			case 1:
+			case 1://Меню
 				MenuCurPos--;
 				if(MenuCurPos==255){
 					MenuCurPos=MenuChildLast[MenuLevel]-MenuChildFirst[MenuLevel];
 				}
-				lcd.drawFastVLine(0,0,128,BLACK);
+				lcd.drawFastVLine(0, 0, 128, BLACK);//Рисуем линию, убираем белый курсор
 				break;
-			case 4:
+			case 4://Яркость
 				brightness+=12;
 				if(brightness>240){
 					brightness=240;
 				}
 				fixedSetNum=currentPer;
-				//lcd.fillRect(4, 69, 120, 10, BLACK);
 				analogWrite(backlight, brightness);
 				break;
-			case 5:
+			case 5://Часы, минуты
 				switch(settingStep){
-					case 0:
-						fixedSetNum=hours;
+					case 0://Часы
+						fixedSetNum=time(4);//=hours
 						hours++;
 						if(hours>23){
 							hours=0;
@@ -696,10 +706,10 @@ void loop(){
 							lcd.print("0");
 						}
 						lcd.print(fixedSetNum);
-						fixedSetNum=hours;
+						fixedSetNum=time(4);//=hours
 						break;
 					case 1:
-						fixedSetNum=minutes;
+						fixedSetNum=time(5);//=minutes
 						minutes++;
 						if(minutes>59){
 							minutes=0;
@@ -710,25 +720,25 @@ void loop(){
 							lcd.print("0");
 						}
 						lcd.print(fixedSetNum);
-						fixedSetNum=minutes;
+						fixedSetNum=time(5);//=minutes
 						break;
 				}
 				break;
 			case 6:
 				switch(settingStep){
-					case 0:
-						fixedSetNum=numWeekDay;
+					case 0://День недели
+						fixedSetNum=time(3);//=numWeekDay
 						numWeekDay++;
 						lcd.setTextColor(BLACK);
 						lcd.setCursor(10,56);
 						lcd.print(namesDays[fixedSetNum-1]);
-						fixedSetNum=numWeekDay;
+						fixedSetNum=time(4);//=numWeekDay
 						break;
-					case 1:
-						fixedSetNum=day;
+					case 1://День
+						fixedSetNum=time(2);//=day
 						day++;
-						if(day==32){
-							month--;
+						if(day>daysinMonths[month]){//day==32
+							day=1;
 						}
 						lcd.setTextColor(BLACK);
 						lcd.setCursor(52,56);
@@ -736,132 +746,56 @@ void loop(){
 							lcd.print("0");
 						}
 						lcd.print(fixedSetNum);
-						fixedSetNum=day;
+						fixedSetNum=time(2);//=day
 						break;
-					case 2:
-						fixedSetNum=month;
+					case 2://Месяц
+						fixedSetNum=time(1);//=month
 						month++;
 						lcd.setTextColor(BLACK);
 						lcd.setCursor(84,56);
 						lcd.print(namesMonths[fixedSetNum-1]);
-						fixedSetNum=month;
+						fixedSetNum=time(1);//=month
 						break;
 				}
 				break;
 		}
 	}
-	if(analogRead(down)==0&&currentTime>=loopTime+5){
-		loopTime=currentTime;
+	if(pressed(down)&&buttonDelay(TimerButton)){
 		switch(MenuType[MenuLevel]){
 			case 1:
-				MenuCurPos++;
-				lcd.drawFastVLine(0,0,128,BLACK);
+				MenuCurPos++:
+				lcd.drawFastVLine(0, 0, 128, BLACK);
 				if(MenuCurPos>MenuChildLast[MenuLevel]-MenuChildFirst[MenuLevel]){
 					MenuCurPos=0;
 				}
 				break;
 			case 4:
 				brightness-=12;
-				if(brightness<12){
-					brightness=12;
-				}
+				if(brightness<12) brightness=12;
 				fixedSetNum=currentPer;
-				//lcd.fillRect(4, 69, 120, 10, BLACK);
-				analogWrite(backlight, brightness);
-				break;
-			case 5:
-				switch(settingStep){
-					case 0:
-						fixedSetNum=hours;
-						hours--;
-						if(hours==255){
-							hours=23;
-						}
-						lcd.setTextColor(BLACK);
-						lcd.setCursor(26,50);
-						if(fixedSetNum<10){
-							lcd.print("0");
-						}
-						lcd.print(fixedSetNum);
-						fixedSetNum=hours;
-						break;
-					case 1:
-						fixedSetNum=minutes;
-						minutes--;
-						if(minutes==255){
-							minutes=59;
-						}
-						lcd.setTextColor(BLACK);
-						lcd.setCursor(68,50);
-						if(fixedSetNum<10){
-							lcd.print("0");
-						}
-						lcd.print(fixedSetNum);
-						fixedSetNum=minutes;
-						break;
-				}
-				break;
-			case 6:
-				switch(settingStep){
-					case 0:
-						fixedSetNum=numWeekDay;
-						numWeekDay--;
-						if(numWeekDay<1){
-							numWeekDay=7;
-						}
-						lcd.setTextColor(BLACK);
-						lcd.setCursor(10,56);
-						lcd.print(namesDays[fixedSetNum-1]);
-						fixedSetNum=numWeekDay;
-						break;
-					case 1:
-						fixedSetNum=day;
-						day--;
-						if(day<1){
-							day=daysinMonths[month];
-						}
-						lcd.setTextColor(BLACK);
-						lcd.setCursor(52,56);
-						if(fixedSetNum<10){
-							lcd.print("0");
-						}
-						lcd.print(fixedSetNum);
-						fixedSetNum=day;
-						break;
-					case 2:
-						fixedSetNum=month;
-						month--;
-						if(month<1){
-							month=12;
-						}
-						lcd.setTextColor(BLACK);
-						lcd.setCursor(84,56);
-						lcd.print(namesMonths[fixedSetNum-1]);
-						fixedSetNum=month;
-						break;
-				}
 				break;
 		}
 	}
 	//
 	switch(MenuType[MenuLevel]){
-		case 0:
+		case 0://Часы
 			DigitalClockFace();
 			break;
-		case 1:
+		case 1://Меню
 			DrawMenu();
 			break;
-		case 4:
+		case 4://Яркость
 			BandSettings();
 			break;
-		case 5:
-			seconds=0;
+		case 5://Время
+			seconds=0;//обнуляется постоянно
 			TimeSettings();
 			break;
-		case 6:
+		case 6://Дата
 			DateSettings();
 			break;
 	}
+	//
 	switch(MenuLevel){
 		case 12:
 			analogWrite(backlight, 0);
@@ -874,11 +808,11 @@ void loop(){
 			lcd.setCursor(2,16);
 			lcd.print("OS version");
 			lcd.setCursor(2,32);
-			lcd.print("0.4.0 alpha");
+			lcd.print("0.5.0 alpha");
 			lcd.setCursor(2,48);
 			lcd.print("SOC");
 			lcd.setCursor(2,64);
-			lcd.print("ATmea328p");
+			lcd.print("ATmega328p");
 			lcd.setCursor(2,80);
 			lcd.print("Free RAM");
 			lcd.setCursor(2,96);
