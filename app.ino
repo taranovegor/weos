@@ -1,8 +1,7 @@
 /*
-weOS ROM 0.5.1
+weOS ROM 0.5.2
 Board: Arduino UNO
 LCD: ILI9163C 1.44" 128x128
-время до очищения дисплея добавить!!!
 */
 #include <SPI.h>
 #include <MsTimer2.h>
@@ -43,10 +42,10 @@ HC05 btSerial = HC05(3, 2);  // cmd, state
 //Кнопки (analog)
 #define back 1
 #define ok 2
-#define up 5//to 3
+#define up 3//to 3
 #define down 4
 //Прочее (digital ШИМ)
-#define vibration 3
+#define vibration 5//3old
 #define backlight 9
 /*
 VCC GND CS RST A0 SDA SCK LED
@@ -83,7 +82,8 @@ const char* namesDays[] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
 const char* namesMonths[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 const byte daysinMonths[13] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 /*Для работы с будильником*/
-//unsigned int vibrationCycle;
+byte vibrationCycle;
+boolean workAlarm;
 const byte vibrationMode[] = {100, 125, 150, 175, 200, 225, 250};
 
 /*Переменные для работы с EEPROM (память)*/
@@ -132,10 +132,10 @@ char* MenuName[14];//Имя меню
 //MenuType = 0;// - циферблат
 //MenuType = 1;// - стандартное меню с дочерними элементами
 //MenuType = 2;// - элементы БЕЗ дочерних элементов
-unsigned int MenuType[14];//Тип меню
-unsigned int MenuParent[14];//Родитель меню
-unsigned int MenuChildFirst[14];//Первый потомок
-unsigned int MenuChildLast[14];//Последний потомок
+byte MenuType[14];//Тип меню
+byte MenuParent[14];//Родитель меню
+byte MenuChildFirst[14];//Первый потомок
+byte MenuChildLast[14];//Последний потомок
 /**Переменные для работы навигации в меню**/
 unsigned int MenuLevel = 0;//Уровень меню (от ok, back)
 byte MenuCurPos = 0;//Текущее положение курсора (от up, down)
@@ -532,21 +532,55 @@ void DigitalClockFace(){
 	}
 }
 
-/*Будильник
 void AlarmClock(){
-	if(time(4)==0&&time(5)==1){
+	if(time(4)==17&&time(5)==3){
+		if(!workAlarm){
+			workAlarm=true;
+			renderingStatics=false;
+		}
+		if(!renderingStatics){
+			lcd.clearScreen();
+			lcd.setCursor(10,10);
+			lcd.setTextSize(2);
+			lcd.print("AlarmClock");
+			renderingStatics=true;
+		}
 		if(currentTime>=loopTime+10){
 			loopTime=currentTime;
 			vibrationCycle++;
 			if(vibrationCycle>7){
-				vibrationCycle=0;
+				vibrationCycle=1;
 			}
 			analogWrite(5, vibrationMode[vibrationCycle-1]);
 		}
 	}
-	else{
-		analogWrite(5, 0);
+	else if(time(4)==17&&time(5)==3+1&&workAlarm==true){
+		analogWrite(5,0);
+		workAlarm=false;
+		printDates=false;
 	}
+		/*if(time(5)!=minuteFixed&&renderingStatics){
+			minuteFixed=time(5);
+			renderingStatics=false;
+		}
+		if(!renderingStatics){
+			lcd.clearScreen();
+			lcd.print("alarmA!11");
+			renderingStatics=true;
+		}
+		if(currentTime>=loopTime+2){
+			loopTime=currentTime;
+		}
+		if(currentTime>=loopTime+10){
+			loopTime=currentTime;
+			vibrationCycle++;
+			if(vibrationCycle>7){
+				vibrationCycle=1;
+			}
+			analogWrite(5, vibrationMode[vibrationCycle-1]);
+		}
+	}
+	if(time(4)==17&&time(5)==3+1&&!renderingStatics) dayFixed=0;*/
 }
 
 /*Энерго Сберегающий режим*/
@@ -573,7 +607,7 @@ void setup(){
 	//Аналоговые
 	pinMode(A1, INPUT);
 	pinMode(A2, INPUT);
-	pinMode(A5, INPUT);//to 3
+	pinMode(A3, INPUT);//to 3
 	pinMode(A4, INPUT);
 	//Цифровые
 	pinMode(backlight, OUTPUT);
@@ -590,7 +624,7 @@ void setup(){
 	//seconds=conv2d(__TIME__ + 6)+6;
 	//minutes=conv2d(__TIME__ + 3);
 	//hours=conv2d(__TIME__);
-	seconds=0;
+	seconds=50;
 	minutes=EEPROM.read(minuteAddress);
 	hours=EEPROM.read(hourAddress);
 	day=EEPROM.read(dayAddress);
@@ -615,6 +649,8 @@ void loop(){
 	currentTime = millis()/100;
 	//Затрагиваем time(255) так как иногда в меню терялась дата
 	time(255);
+	//
+	AlarmClock();
 	if(backlightTimer!=0&&currentTime>=loopTime+backlightTimer*100&&MenuLevel>0){
 		printDates=false;
 		MenuLevel=0;
@@ -642,7 +678,7 @@ void loop(){
 			break;
 	}
 	//Обработка кнопок
-	if(pressed(ok)&&buttonDelay(TimerButton)){
+	if(pressed(ok)&&buttonDelay(TimerButton)&&MenuType[MenuLevel]!=2){
 		renderingStatics=false;
 		switch(MenuType[MenuLevel]){
 			case 3:
@@ -707,7 +743,7 @@ void loop(){
 				break;
 		}
 	}
-	if(pressed(back)&&buttonDelay(TimerButton)){
+	if(pressed(back)&&buttonDelay(TimerButton)&&MenuLevel!=0){
 		renderingStatics=false;
 		switch(MenuType[MenuLevel]){
 			case 5://Часы, минуты
@@ -947,7 +983,7 @@ void loop(){
 			lcd.setCursor(2,16);
 			lcd.print("OS version");
 			lcd.setCursor(2,32);
-			lcd.print("0.5.1 beta");
+			lcd.print("0.5.2 beta");
 			lcd.setCursor(2,48);
 			lcd.print("SOC");
 			lcd.setCursor(2,64);
