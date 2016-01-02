@@ -1,5 +1,5 @@
 /*
-weOS ROM 0.5.2
+weOS ROM 0.6.0
 Board: Arduino UNO
 LCD: ILI9163C 1.44" 128x128
 */
@@ -83,7 +83,7 @@ const char* namesMonths[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "A
 const byte daysinMonths[13] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 /*Для работы с будильником*/
 byte vibrationCycle;
-boolean workAlarm;
+boolean serviceSet;
 const byte vibrationMode[] = {100, 125, 150, 175, 200, 225, 250};
 
 /*Переменные для работы с EEPROM (память)*/
@@ -533,7 +533,7 @@ void DigitalClockFace(){
 }
 
 void AlarmClock(){
-	if(time(4)==17&&time(5)==3){
+	if(time(4)==8&&time(5)==3){
 		if(!workAlarm){
 			workAlarm=true;
 			renderingStatics=false;
@@ -551,7 +551,7 @@ void AlarmClock(){
 			if(vibrationCycle>7){
 				vibrationCycle=1;
 			}
-			analogWrite(5, vibrationMode[vibrationCycle-1]);
+			//analogWrite(5, vibrationMode[vibrationCycle-1]);
 		}
 	}
 	else if(time(4)==17&&time(5)==3+1&&workAlarm==true){
@@ -559,28 +559,6 @@ void AlarmClock(){
 		workAlarm=false;
 		printDates=false;
 	}
-		/*if(time(5)!=minuteFixed&&renderingStatics){
-			minuteFixed=time(5);
-			renderingStatics=false;
-		}
-		if(!renderingStatics){
-			lcd.clearScreen();
-			lcd.print("alarmA!11");
-			renderingStatics=true;
-		}
-		if(currentTime>=loopTime+2){
-			loopTime=currentTime;
-		}
-		if(currentTime>=loopTime+10){
-			loopTime=currentTime;
-			vibrationCycle++;
-			if(vibrationCycle>7){
-				vibrationCycle=1;
-			}
-			analogWrite(5, vibrationMode[vibrationCycle-1]);
-		}
-	}
-	if(time(4)==17&&time(5)==3+1&&!renderingStatics) dayFixed=0;*/
 }
 
 /*Энерго Сберегающий режим*/
@@ -642,8 +620,9 @@ void setup(){
 	5-пол секунды
 	10-секунда*/
 	loopTime = currentTime;
+	serviceSet=true;
 }
-
+boolean superSaveMode = true;
 void loop(){
 	//Обновляем текущее время
 	currentTime = millis()/100;
@@ -983,7 +962,7 @@ void loop(){
 			lcd.setCursor(2,16);
 			lcd.print("OS version");
 			lcd.setCursor(2,32);
-			lcd.print("0.5.2 beta");
+			lcd.print("0.6.0 beta");
 			lcd.setCursor(2,48);
 			lcd.print("SOC");
 			lcd.setCursor(2,64);
