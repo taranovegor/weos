@@ -1,5 +1,5 @@
 /*
-weOS ROM 0.6.0
+weOS ROM 0.6.0.1
 Board: Arduino UNO
 LCD: ILI9163C 1.44" 128x128
 */
@@ -533,30 +533,28 @@ void DigitalClockFace(){
 }
 
 void AlarmClock(){
-	if(time(4)==8&&time(5)==3){
-		if(!workAlarm){
-			workAlarm=true;
-			renderingStatics=false;
-		}
-		if(!renderingStatics){
+	if(time(4)==8&&time(5)==3&&serviceSet&&MenuType[MenuLevel]!=5){
+		if(vibrationCycle==0){
 			lcd.clearScreen();
 			lcd.setCursor(10,10);
 			lcd.setTextSize(2);
-			lcd.print("AlarmClock");
-			renderingStatics=true;
+			lcd.print("ALARM");
+		}
+		if(pressed(ok)&&buttonDelay(1)){
+			analogWrite(5,0);
+			serviceSet=false;
+			printDates=false;
 		}
 		if(currentTime>=loopTime+10){
 			loopTime=currentTime;
 			vibrationCycle++;
-			if(vibrationCycle>7){
-				vibrationCycle=1;
-			}
-			//analogWrite(5, vibrationMode[vibrationCycle-1]);
+			if(vibrationCycle>7) vibrationCycle=1;
+			analogWrite(5, vibrationMode[vibrationCycle-1]);
 		}
 	}
-	else if(time(4)==17&&time(5)==3+1&&workAlarm==true){
+	else if(time(4)==8&&time(5)==3+1&&serviceSet){
 		analogWrite(5,0);
-		workAlarm=false;
+		serviceSet=false;
 		printDates=false;
 	}
 }
@@ -962,7 +960,7 @@ void loop(){
 			lcd.setCursor(2,16);
 			lcd.print("OS version");
 			lcd.setCursor(2,32);
-			lcd.print("0.6.0 beta");
+			lcd.print("0.6.0.1 beta");
 			lcd.setCursor(2,48);
 			lcd.print("SOC");
 			lcd.setCursor(2,64);
