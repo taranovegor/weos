@@ -1,5 +1,5 @@
 /*
-weOS ROM 0.6.0.1
+weOS ROM 0.6.1
 Board: Arduino UNO
 LCD: ILI9163C 1.44" 128x128
 */
@@ -533,7 +533,10 @@ void DigitalClockFace(){
 }
 
 void AlarmClock(){
-	if(time(4)==8&&time(5)==3&&serviceSet&&MenuType[MenuLevel]!=5){
+	if(time(4)==8&&time(5)==3&&serviceSet&&MenuType[MenuLevel]!=){//MENU TYPE
+		if(MenuLevel>2){
+
+		}
 		if(vibrationCycle==0){
 			lcd.clearScreen();
 			lcd.setCursor(10,10);
@@ -960,7 +963,7 @@ void loop(){
 			lcd.setCursor(2,16);
 			lcd.print("OS version");
 			lcd.setCursor(2,32);
-			lcd.print("0.6.0.1 beta");
+			lcd.print("0.6.1 beta");
 			lcd.setCursor(2,48);
 			lcd.print("SOC");
 			lcd.setCursor(2,64);
