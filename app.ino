@@ -1,5 +1,5 @@
 /*
-weOS ROM 0.6.2
+weOS ROM 0.6.5 (TOO BIG TO INSTALL!!!)
 Board: Arduino UNO
 LCD: ILI9163C 1.44" 128x128
 */
@@ -260,7 +260,7 @@ boolean buttonDelay(byte delay){
 }
 
 void DrawMenu(){
-	lcd.setTextSize(2);
+	lcd.setTextSize(1);
 	byte menuCursorPos=1;//Позиция курсора в принте меню
 	for(int i=MenuChildFirst[MenuLevel];i<MenuChildLast[MenuLevel]+1;i++){
 		lcd.setCursor(3,menuCursorPos);
@@ -271,7 +271,7 @@ void DrawMenu(){
 }
 
 void ListSettings(){
-	lcd.setTextSize(2);//10+6
+	lcd.setTextSize(1);//10+6
 	if(!renderingStatics){
 		lcd.setCursor(13,2);
 		lcd.print("Backlight");
@@ -311,7 +311,7 @@ void ListSettings(){
 void BandSettings(){
 	currentPer=brightness*100/240;
 	if(!renderingStatics){
-		lcd.setTextSize(2);
+		lcd.setTextSize(1);
 		lcd.setCursor(8,3);
 		lcd.print("Brightness");
 		lcd.fillRect(4, 69, 1.2*currentPer, 10, WHITE);
@@ -352,7 +352,7 @@ void BandSettings(){
 }
 
 void TimeSettings(){
-	lcd.setTextSize(2);
+	lcd.setTextSize(1);
 	lcd.setTextColor(WHITE);
 	if(renderingStatics==false){
 		lcd.setCursor(42,3);
@@ -360,7 +360,7 @@ void TimeSettings(){
 		renderingStatics=true;
 	}
 	//main
-	lcd.setTextSize(3);
+	lcd.setTextSize(1);
 	lcd.setCursor(26,50);
 	if(time(4)<10) lcd.print("0");
 	lcd.print(time(4));
@@ -378,7 +378,7 @@ void TimeSettings(){
 }
 
 void DateSettings(){
-	lcd.setTextSize(2);
+	lcd.setTextSize(1);
 	lcd.setTextColor(WHITE);
 	if(renderingStatics==false){
 		lcd.setCursor(42,3);
@@ -412,7 +412,7 @@ void DateSettings(){
 }
 
 void AlarmSettings(){
-	lcd.setTextSize(2);
+	lcd.setTextSize(1);
 	lcd.setTextColor(WHITE);
 	if(renderingStatics==false){
 		lcd.setCursor(32,3);
@@ -420,7 +420,7 @@ void AlarmSettings(){
 		renderingStatics=true;
 	}
 	//main
-	lcd.setTextSize(3);
+	lcd.setTextSize(1);
 	lcd.setCursor(26,50);
 	if(alarmHour<10) lcd.print("0");
 	lcd.print(alarmHour);
@@ -509,7 +509,7 @@ void DigitalClockFace(){
 	if(time(2)!=dayFixed||!printDates){
 		printDates=false;
 		lcd.clearScreen();
-		lcd.setTextSize(2);
+		lcd.setTextSize(1);
 		//lcd.setTextColor(WHITE);
 		//День недели
 		lcd.setCursor(70,32);
@@ -525,7 +525,7 @@ void DigitalClockFace(){
 	}
 	//Часы
 	if(time(4)!=hourFixed||!printDates){
-		lcd.setTextSize(4);
+		lcd.setTextSize(2);
 		lcd.setTextColor(BLACK);
 		lcd.setCursor(24,30);
 		if(time(4)<10&&time(4)!=0){
@@ -546,7 +546,7 @@ void DigitalClockFace(){
 	}
 	//Минуты
 	if(time(5)!=minuteFixed||!printDates){
-		lcd.setTextSize(4);
+		lcd.setTextSize(2);
 		lcd.setTextColor(BLACK);
 		lcd.setCursor(24,63);
 		if(time(5)<10&&time(5)!=0){
@@ -573,11 +573,11 @@ void AlarmClock(){
 	if(time(4)==alarmHour&&time(5)==alarmMinute&&alarmSet&&MenuType[MenuLevel]!=7){
 		if(vibrationCycle==0){
 			lcd.clearScreen();
-			lcd.setTextSize(2);
+			lcd.setTextSize(1);
 			lcd.setCursor(34,20);
 			lcd.print("Alarm");
 			//рисуем время
-			lcd.setTextSize(3);
+			lcd.setTextSize(1);
 			lcd.setCursor(26,50);
 			if(alarmHour<10) lcd.print("0");
 			lcd.print(alarmHour);
@@ -1104,12 +1104,12 @@ void loop(){
 			break;
 		case 13:
 			lcd.setCursor(3,0);
-			lcd.setTextSize(2);
+			lcd.setTextSize(1);
 			lcd.print("Information");
 			lcd.setCursor(2,16);
 			lcd.print("OS version");
 			lcd.setCursor(2,32);
-			lcd.print("0.6.2 beta");
+			lcd.print("0.6.5 beta");
 			lcd.setCursor(2,48);
 			lcd.print("SOC");
 			lcd.setCursor(2,64);
