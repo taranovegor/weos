@@ -1,5 +1,5 @@
 /*
-weOS ROM 0.6.1
+weOS ROM 0.6.2
 Board: Arduino UNO
 LCD: ILI9163C 1.44" 128x128
 */
@@ -8,7 +8,8 @@ LCD: ILI9163C 1.44" 128x128
 #include <EEPROM.h>
 #include <MemoryFree.h>
 #include <TFT_ILI9163C.h>
-#include "_fonts/defaultFont.c"
+//#include "_fonts/defaultFont.c"
+//#include "_fonts/ar.c"
 /*Bluetooth
 #include <HC05.h>
 
@@ -18,6 +19,10 @@ HC05 btSerial = HC05(A2, A5, A3, A4);  // cmd, state, rx, tx
 #else
 HC05 btSerial = HC05(3, 2);  // cmd, state
 #endif
+
+
+defaultFont
+arial_x2
 */
 
 /*Analog Read начало*/
@@ -82,9 +87,11 @@ const char* namesDays[] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
 const char* namesMonths[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 const byte daysinMonths[13] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 /*Для работы с будильником*/
-byte vibrationCycle;
-boolean serviceSet;
+boolean alarmSet;//Установлен ли будильник true - да, false - нет
+byte vibrationCycle;//Цикл вибрации, на ноль есть действие, так что нужно обнулять
 const byte vibrationMode[] = {100, 125, 150, 175, 200, 225, 250};
+byte alarmMinute;
+byte alarmHour;
 
 /*Переменные для работы с EEPROM (память)*/
 /*Адреса*/
@@ -126,8 +133,11 @@ boolean devMode = false;//Деволперский режим
 boolean printDates = false;//Спец.переменная для работы с датами
 boolean sleepMode = false;//Режим сна
 boolean renderingStatics = false;//Отрисовка статических изображений
+boolean serviceWork = false;//Работа какого то сервиса который может выполнятся в момент работы другой программы, например будильник
 
 /*Переменные для работы меню/c меню*/
+//основа построения меню была взята с geektimes.ru
+//http://geektimes.ru/post/255408/
 char* MenuName[14];//Имя меню
 //MenuType = 0;// - циферблат
 //MenuType = 1;// - стандартное меню с дочерними элементами
@@ -401,6 +411,32 @@ void DateSettings(){
 	}
 }
 
+void AlarmSettings(){
+	lcd.setTextSize(2);
+	lcd.setTextColor(WHITE);
+	if(renderingStatics==false){
+		lcd.setCursor(32,3);
+		lcd.print("Alarm");
+		renderingStatics=true;
+	}
+	//main
+	lcd.setTextSize(3);
+	lcd.setCursor(26,50);
+	if(alarmHour<10) lcd.print("0");
+	lcd.print(alarmHour);
+	lcd.print(":");
+	if(alarmMinute<10) lcd.print("0");
+	lcd.print(alarmMinute);
+	switch(settingStep){
+		case 0:
+			lcd.drawFastHLine(26, 76, 33, WHITE);
+			break;
+		case 1:
+			lcd.drawFastHLine(68, 76, 33, WHITE);
+			break;
+	}
+}
+
 /*Установка даты и времени от компьютера*/
 /*static uint8_t conv2d(const char* p){
 	uint8_t v =0;
@@ -532,33 +568,58 @@ void DigitalClockFace(){
 	}
 }
 
+/*Будильник*/
 void AlarmClock(){
-	if(time(4)==8&&time(5)==3&&serviceSet&&MenuType[MenuLevel]!=){//MENU TYPE
-		if(MenuLevel>2){
-
-		}
+	if(time(4)==alarmHour&&time(5)==alarmMinute&&alarmSet&&MenuType[MenuLevel]!=7){
 		if(vibrationCycle==0){
 			lcd.clearScreen();
-			lcd.setCursor(10,10);
 			lcd.setTextSize(2);
-			lcd.print("ALARM");
+			lcd.setCursor(34,20);
+			lcd.print("Alarm");
+			//рисуем время
+			lcd.setTextSize(3);
+			lcd.setCursor(26,50);
+			if(alarmHour<10) lcd.print("0");
+			lcd.print(alarmHour);
+			lcd.print(":");
+			if(alarmMinute<10) lcd.print("0");
+			lcd.print(alarmMinute);
+			serviceWork=true;//Сервис работает
 		}
-		if(pressed(ok)&&buttonDelay(1)){
+		if(pressed(ok)&&buttonDelay(1)){//Если нажата кнопка ok во время звонка будильника
+			lcd.clearScreen();
 			analogWrite(5,0);
-			serviceSet=false;
+			vibrationCycle=0;
+			alarmSet=false;
+			serviceWork=false;
 			printDates=false;
+			renderingStatics=false;
 		}
-		if(currentTime>=loopTime+10){
-			loopTime=currentTime;
+		if(pressed(back)&&buttonDelay(1)){//Если нажата кнопка ok во время звонка будильника
+			lcd.clearScreen();//Очищаем дисплей
+			analogWrite(5,0);//Выключаем вибромотор
+			alarmMinute+=5;
+			vibrationCycle=0;//Обнуляем ибо словим проблему в будущем
+			alarmSet=true;//Будильник установлен снова
+			serviceWork=false;//Сервис прерывающий прочие программы отключен
+			printDates=false;//Даём комманды на то что даты не отрисованы, нужно перерисовать
+			renderingStatics=false;//Отрисовка статики не выполнена
+		}
+		if(buttonDelay(10)){//Работа вибромотора, добавление 1 цикла по истечению таймера в 1сек. (bD - экономия места)
 			vibrationCycle++;
 			if(vibrationCycle>7) vibrationCycle=1;
 			analogWrite(5, vibrationMode[vibrationCycle-1]);
 		}
 	}
-	else if(time(4)==8&&time(5)==3+1&&serviceSet){
-		analogWrite(5,0);
-		serviceSet=false;
-		printDates=false;
+	else if(time(4)==alarmHour&&time(5)==alarmMinute+1&&alarmSet&&serviceWork){//если на 1 минуту раньше поставить будильник не ставит, юзаю serviceWork
+		lcd.clearScreen();//Очищаем дисплей
+		analogWrite(5,0);//Выключаем вибромотор
+		alarmMinute+=5;
+		vibrationCycle=0;//Обнуляем ибо словим проблему в будущем
+		alarmSet=true;//Будильник установлен снова
+		serviceWork=false;//Сервис прерывающий прочие программы отключен
+		printDates=false;//Даём комманды на то что даты не отрисованы, нужно перерисовать
+		renderingStatics=false;//Отрисовка статики не выполнена
 	}
 }
 
@@ -577,11 +638,27 @@ void setup(){
 	/*Serial порт*/
 	//Serial.begin(9600);
 	/*чтение EEPROM*/
+	//Время
+	seconds=0;
+	minutes=EEPROM.read(minuteAddress);
+	hours=EEPROM.read(hourAddress);
+	day=EEPROM.read(dayAddress);
+	numWeekDay=EEPROM.read(numWeekDayAddress);
+	month=EEPROM.read(monthAddress);//7[proverka]
+	year=2016;
+	//Будильник
+	alarmMinute=EEPROM.read(ACMinute);
+	alarmHour=EEPROM.read(ACHour);
+	//Яркость
 	brightness=EEPROM.read(brightnessAddress);
+	brightness=50;
 	backlightTimer=EEPROM.read(backlightTimerAddress);//(6 хранится 120 на выходе)*10*2
+	pinMode(backlight, OUTPUT);
+	analogWrite(backlight, brightness);
 	/*Инциализация экрана*/
 	lcd.begin();
-	lcd.setFont(&defaultFont);
+	//lcd.setFont(&defaultFont);
+	//lcd.setFont(&ar);
 	/*Установка типа пинов*/
 	//Аналоговые
 	pinMode(A1, INPUT);
@@ -589,27 +666,16 @@ void setup(){
 	pinMode(A3, INPUT);//to 3
 	pinMode(A4, INPUT);
 	//Цифровые
-	pinMode(backlight, OUTPUT);
+
 	pinMode(vibration, OUTPUT);
-	//
-	analogWrite(backlight, brightness);
+	//Установка яркости
+
 	/*DevMode включчение при зажатии кнопок back и ok*/
 	if(analogRead(back)==0&&digitalRead(ok)==0){
 		devMode = true;
 	}
 	/*Инциализация меню*/
 	MenuSetup();
-	/*Установка времени (только PC и COM-port)*/
-	//seconds=conv2d(__TIME__ + 6)+6;
-	//minutes=conv2d(__TIME__ + 3);
-	//hours=conv2d(__TIME__);
-	seconds=50;
-	minutes=EEPROM.read(minuteAddress);
-	hours=EEPROM.read(hourAddress);
-	day=EEPROM.read(dayAddress);
-	numWeekDay=EEPROM.read(numWeekDayAddress);
-	month=EEPROM.read(monthAddress);//7[proverka]
-	year=2015;
 	/*Установка fix-дат*/
 	minuteFixed=time(5);
 	hourFixed=time(4);
@@ -621,9 +687,9 @@ void setup(){
 	5-пол секунды
 	10-секунда*/
 	loopTime = currentTime;
-	serviceSet=true;
+	alarmSet=true;
 }
-boolean superSaveMode = true;
+
 void loop(){
 	//Обновляем текущее время
 	currentTime = millis()/100;
@@ -631,6 +697,8 @@ void loop(){
 	time(255);
 	//
 	AlarmClock();
+	//Если сервис. функция работает, тогда прерываем работу программы.
+	if(serviceWork==true) return;
 	if(backlightTimer!=0&&currentTime>=loopTime+backlightTimer*100&&MenuLevel>0){
 		printDates=false;
 		MenuLevel=0;
@@ -651,6 +719,9 @@ void loop(){
 			TimerButton = 3;
 			break;
 		case 6:
+			TimerButton = 3;
+			break;
+		case 7:
 			TimerButton = 3;
 			break;
 		default:
@@ -716,6 +787,19 @@ void loop(){
 					lcd.clearScreen();
 				}
 				break;
+			case 7:
+				settingStep++;
+				lcd.drawFastHLine(26, 76, 75, BLACK);
+				if(settingStep>1){
+					alarmSet=true;
+					EEPROM.write(ACMinute, alarmMinute);
+					EEPROM.write(ACHour, alarmHour);
+					MenuCurPos=MenuLevel-MenuChildFirst[MenuParent[MenuLevel]];
+					MenuLevel=MenuParent[MenuLevel];
+					settingStep=0;
+					lcd.clearScreen();
+				}
+				break;
 			default://Если не удовлетворяет (обычное меню)
 				MenuLevel=MenuChildFirst[MenuLevel]+MenuCurPos;
 				MenuCurPos=0;
@@ -739,6 +823,16 @@ void loop(){
 			case 6:
 				settingStep--;
 				lcd.drawFastHLine(10, 74, 108, BLACK);
+				if(settingStep==255){//255 так как byte 0-1=255
+					MenuCurPos=MenuLevel-MenuChildFirst[MenuParent[MenuLevel]];
+					MenuLevel=MenuParent[MenuLevel];
+					settingStep=0;
+					lcd.clearScreen();
+				}
+				break;
+			case 7:
+				settingStep--;
+				lcd.drawFastHLine(26, 76, 75, BLACK);
 				if(settingStep==255){//255 так как byte 0-1=255
 					MenuCurPos=MenuLevel-MenuChildFirst[MenuParent[MenuLevel]];
 					MenuLevel=MenuParent[MenuLevel];
@@ -833,6 +927,30 @@ void loop(){
 						break;
 				}
 				break;
+			case 7://Время
+				switch(settingStep){
+					case 0://Часы
+						fixedSetNum=alarmHour;
+						alarmHour++;
+						if(alarmHour>23) alarmHour=0;
+						lcd.setTextColor(BLACK);
+						lcd.setCursor(26,50);
+						if(fixedSetNum<10) lcd.print("0");
+						lcd.print(fixedSetNum);
+						fixedSetNum=alarmHour;
+						break;
+					case 1:
+						fixedSetNum=alarmMinute;
+						alarmMinute++;
+						if(alarmMinute>59) alarmMinute=0;
+						lcd.setTextColor(BLACK);
+						lcd.setCursor(68,50);
+						if(fixedSetNum<10) lcd.print("0");
+						lcd.print(fixedSetNum);
+						fixedSetNum=alarmMinute;
+						break;
+				}
+				break;
 		}
 	}
 	if(pressed(down)&&buttonDelay(TimerButton)){
@@ -916,6 +1034,30 @@ void loop(){
 						break;
 				}
 				break;
+			case 7://Время
+				switch(settingStep){
+					case 0://Часы
+						fixedSetNum=alarmHour;
+						alarmHour--;
+						if(alarmHour==255) alarmHour=23;
+						lcd.setTextColor(BLACK);
+						lcd.setCursor(26,50);
+						if(fixedSetNum<10) lcd.print("0");
+						lcd.print(fixedSetNum);
+						fixedSetNum=alarmHour;
+						break;
+					case 1://Минуты
+						fixedSetNum=alarmMinute;
+						alarmMinute--;
+						if(alarmMinute==255) alarmMinute=59;
+						lcd.setTextColor(BLACK);
+						lcd.setCursor(68,50);
+						if(fixedSetNum<10) lcd.print("0");
+						lcd.print(fixedSetNum);
+						fixedSetNum=alarmMinute;
+						break;
+				}
+				break;
 		}
 	}
 	//
@@ -939,15 +1081,19 @@ void loop(){
 		case 6://Дата
 			DateSettings();
 			break;
+		case 7:
+			AlarmSettings();
+			break;
 	}
 	//
 	switch(MenuLevel){
-		case 4:
-			MenuCurPos=MenuLevel-MenuChildFirst[MenuParent[MenuLevel]];
-			MenuLevel=MenuParent[MenuLevel];
-			lcd.clearScreen();
+		case 2:
+			if(alarmSet==true){
+				lcd.setCursor(65, 8);
+				lcd.print("°");
+			}
 			break;
-		case 6:
+		case 4:
 			MenuCurPos=MenuLevel-MenuChildFirst[MenuParent[MenuLevel]];
 			MenuLevel=MenuParent[MenuLevel];
 			lcd.clearScreen();
@@ -963,7 +1109,7 @@ void loop(){
 			lcd.setCursor(2,16);
 			lcd.print("OS version");
 			lcd.setCursor(2,32);
-			lcd.print("0.6.1 beta");
+			lcd.print("0.6.2 beta");
 			lcd.setCursor(2,48);
 			lcd.print("SOC");
 			lcd.setCursor(2,64);
