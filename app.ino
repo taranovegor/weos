@@ -1,5 +1,6 @@
 /*
-weOS ROM 0.6.5 (TOO BIG TO INSTALL!!!)
+weOS ROM 0.7
+0.7 - new FONTS!!!
 Board: Arduino UNO
 LCD: ILI9163C 1.44" 128x128
 */
@@ -9,7 +10,7 @@ LCD: ILI9163C 1.44" 128x128
 #include <MemoryFree.h>
 #include <TFT_ILI9163C.h>
 //#include "_fonts/defaultFont.c"
-//#include "_fonts/ar.c"
+//#include "_fonts/arial_x2.c"
 /*Bluetooth
 #include <HC05.h>
 
@@ -37,11 +38,6 @@ arial_x2
 #define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
 #endif
 /*Analog Read конец*/
-
-/*Цвета*/
-#define	BLACK 0x0000
-#define	RED   0xF800
-#define WHITE 0xFFFF
 
 /*Выходы*/
 //Кнопки (analog)
@@ -273,7 +269,7 @@ void DrawMenu(){
 void ListSettings(){
 	lcd.setTextSize(1);//10+6
 	if(!renderingStatics){
-		lcd.setCursor(13,2);
+		lcd.setCursor(32,2);
 		lcd.print("Backlight");
 		lcd.setCursor(3,18);
 		lcd.print("1min");
@@ -312,7 +308,7 @@ void BandSettings(){
 	currentPer=brightness*100/240;
 	if(!renderingStatics){
 		lcd.setTextSize(1);
-		lcd.setCursor(8,3);
+		lcd.setCursor(27,3);
 		lcd.print("Brightness");
 		lcd.fillRect(4, 69, 1.2*currentPer, 10, WHITE);
 		renderingStatics=true;
@@ -355,12 +351,12 @@ void TimeSettings(){
 	lcd.setTextSize(1);
 	lcd.setTextColor(WHITE);
 	if(renderingStatics==false){
-		lcd.setCursor(42,3);
+		lcd.setCursor(46,3);
 		lcd.print("Time");
 		renderingStatics=true;
 	}
 	//main
-	lcd.setTextSize(1);
+	lcd.setTextSize(2);
 	lcd.setCursor(26,50);
 	if(time(4)<10) lcd.print("0");
 	lcd.print(time(4));
@@ -381,7 +377,7 @@ void DateSettings(){
 	lcd.setTextSize(1);
 	lcd.setTextColor(WHITE);
 	if(renderingStatics==false){
-		lcd.setCursor(42,3);
+		lcd.setCursor(47,3);
 		lcd.print("Date");
 		renderingStatics=true;
 	}
@@ -415,12 +411,12 @@ void AlarmSettings(){
 	lcd.setTextSize(1);
 	lcd.setTextColor(WHITE);
 	if(renderingStatics==false){
-		lcd.setCursor(32,3);
+		lcd.setCursor(43,3);
 		lcd.print("Alarm");
 		renderingStatics=true;
 	}
 	//main
-	lcd.setTextSize(1);
+	lcd.setTextWrap(2);
 	lcd.setCursor(26,50);
 	if(alarmHour<10) lcd.print("0");
 	lcd.print(alarmHour);
@@ -512,13 +508,13 @@ void DigitalClockFace(){
 		lcd.setTextSize(1);
 		//lcd.setTextColor(WHITE);
 		//День недели
-		lcd.setCursor(70,32);
+		lcd.setCursor(66,35);
 		lcd.print(namesDays[time(3)-1]);
 		//День месяца
-		lcd.setCursor(70,48);
+		lcd.setCursor(66,51);
 		lcd.print(time(2));
 		//Месяц
-		lcd.setCursor(70,64);
+		lcd.setCursor(66,67);
 		lcd.print(namesMonths[time(1)-1]);
 		//Обновляем переменную
 		dayFixed=time(2);
@@ -527,9 +523,9 @@ void DigitalClockFace(){
 	if(time(4)!=hourFixed||!printDates){
 		lcd.setTextSize(2);
 		lcd.setTextColor(BLACK);
-		lcd.setCursor(24,30);
+		lcd.setCursor(30,32);
 		if(time(4)<10&&time(4)!=0){
-			lcd.setCursor(48,30);
+			lcd.setCursor(46,32);
 			lcd.print(hourFixed);
 		}
 		else if(time(4)==10){
@@ -540,7 +536,7 @@ void DigitalClockFace(){
 		}
 		hourFixed=time(4);
 		lcd.setTextColor(WHITE);
-		lcd.setCursor(24,30);
+		lcd.setCursor(30,32);
 		if(time(4)<10) lcd.print("0");
 		lcd.print(time(4));
 	}
@@ -548,9 +544,9 @@ void DigitalClockFace(){
 	if(time(5)!=minuteFixed||!printDates){
 		lcd.setTextSize(2);
 		lcd.setTextColor(BLACK);
-		lcd.setCursor(24,63);
+		lcd.setCursor(30,62);
 		if(time(5)<10&&time(5)!=0){
-			lcd.setCursor(48,63);
+			lcd.setCursor(48,62);
 			lcd.print(minuteFixed);
 		}
 		else if(time(5)==10){
@@ -561,10 +557,11 @@ void DigitalClockFace(){
 		}
 		minuteFixed=time(5);
 		lcd.setTextColor(WHITE);
-		lcd.setCursor(24,63);
+		lcd.setCursor(30,62);
 		if(time(5)<10) lcd.print("0");
 		lcd.print(time(5));
 		if(!printDates) printDates=true;
+		//lcd.setAddrWindow(0,0,64,64);
 	}
 }
 
@@ -639,7 +636,7 @@ void setup(){
 	//Serial.begin(9600);
 	/*чтение EEPROM*/
 	//Время
-	seconds=0;
+	seconds=50;
 	minutes=EEPROM.read(minuteAddress);
 	hours=EEPROM.read(hourAddress);
 	day=EEPROM.read(dayAddress);
@@ -657,8 +654,9 @@ void setup(){
 	analogWrite(backlight, brightness);
 	/*Инциализация экрана*/
 	lcd.begin();
+	//lcd.setRotation(2);
 	//lcd.setFont(&defaultFont);
-	//lcd.setFont(&ar);
+	//lcd.setFont(&arial_dig);
 	/*Установка типа пинов*/
 	//Аналоговые
 	pinMode(A1, INPUT);
@@ -666,7 +664,7 @@ void setup(){
 	pinMode(A3, INPUT);//to 3
 	pinMode(A4, INPUT);
 	//Цифровые
-
+	minutes=59;
 	pinMode(vibration, OUTPUT);
 	//Установка яркости
 
@@ -1103,13 +1101,13 @@ void loop(){
 			resetFunc();
 			break;
 		case 13:
-			lcd.setCursor(3,0);
+			lcd.setCursor(26,0);
 			lcd.setTextSize(1);
 			lcd.print("Information");
 			lcd.setCursor(2,16);
 			lcd.print("OS version");
 			lcd.setCursor(2,32);
-			lcd.print("0.6.5 beta");
+			lcd.print("0.7 beta");
 			lcd.setCursor(2,48);
 			lcd.print("SOC");
 			lcd.setCursor(2,64);
