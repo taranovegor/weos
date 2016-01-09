@@ -1,5 +1,5 @@
 /*
-weOS ROM 0.7.1
+weOS ROM 0.7.2
 Board: Arduino UNO
 LCD: ILI9163C 1.44" 128x128
 <cg>
@@ -12,6 +12,12 @@ LCD: ILI9163C 1.44" 128x128
 #include <EEPROM.h>
 #include <MemoryFree.h>
 #include <TFT_ILI9163C.h>
+
+/*
+w0.7.2 - beta (test bat v.1);
+use 14 600 байт (45%) memory device.
+vars use 1 190 байт (58%) dyn. mem.
+*/
 /*
 #include <HC05.h>
 
@@ -68,6 +74,7 @@ TFT_ILI9163C lcd = TFT_ILI9163C(__CS, __DC, __RST);
 /*Для работы с таймерами (?long?)*/
 unsigned int currentTime;
 unsigned int loopTime;
+unsigned int vov;
 /*Для работы с временем, датой*/
 volatile byte seconds;
 byte minutes;
@@ -125,6 +132,8 @@ byte backlightTimer;
 byte settingStep;
 byte currentPer;
 int fixedSetNum;//Фиксированная цифра настроек (для удаление прошлой)
+/*Питание*/
+double voltage;
 
 /*Прочее*/
 boolean devMode = false;//Деволперский режим
@@ -149,7 +158,6 @@ unsigned int MenuLevel = 0;//Уровень меню (от ok, back)
 byte MenuCurPos = 0;//Текущее положение курсора (от up, down)
 byte TimerButton;
 
-/*Заполнение массива меню*/
 void MenuSetup(){
 	/*
 	MenuName[]="";
@@ -260,11 +268,14 @@ boolean buttonDelay(byte delay){//Возращает true если таймер 
 /*Отрисовка меню*/
 void DrawMenu(){
 	lcd.setTextSize(1);
-	byte menuCursorPos=1;//Позиция курсора в принте меню
-	for(int i=MenuChildFirst[MenuLevel];i<MenuChildLast[MenuLevel]+1;i++){
-		lcd.setCursor(3,menuCursorPos);
-		menuCursorPos=menuCursorPos+16;//Если надумаю ставить название меню просто поменять принт и сложение местами
-		lcd.print(MenuName[i]);
+	if(!renderingStatics){
+		renderingStatics=true;
+		byte menuCursorPos=1;//Позиция курсора в принте меню
+		for(int i=MenuChildFirst[MenuLevel];i<MenuChildLast[MenuLevel]+1;i++){
+			lcd.setCursor(3,menuCursorPos);
+			menuCursorPos=menuCursorPos+16;//Если надумаю ставить название меню просто поменять принт и сложение местами
+			lcd.print(MenuName[i]);
+		}
 	}
 	lcd.drawFastVLine(0,MenuCurPos*16+3,14,WHITE);
 }
@@ -505,11 +516,30 @@ void DigitalClockFace(){
 		lcd.setCursor(66,35);
 		lcd.print(namesDays[time(3)-1]);
 		//День месяца
-		lcd.setCursor(66,51);
+		lcd.setCursor(66,49);
 		lcd.print(time(2));
 		//Месяц
-		lcd.setCursor(66,67);
+		lcd.setCursor(66,63);
 		lcd.print(namesMonths[time(1)-1]);
+		//
+		lcd.setCursor(66,78);
+		lcd.print(analogRead(0));
+		if(alarmSet) lcd.print("@");
+		if(voltage>=4.0){
+			lcd.setTextColor(GREEN);
+			lcd.print("{");
+			lcd.setTextColor(WHITE);
+		}
+		else if(voltage<4.0&&voltage>3.0){
+			lcd.setTextColor(YELLOW);
+			lcd.print("}");
+			lcd.setTextColor(WHITE);
+		}
+		else{
+			lcd.setTextColor(RED);
+			lcd.print("`");
+			lcd.setTextColor(WHITE);
+		}
 		//Обновляем переменную
 		dayFixed=time(2);
 	}
@@ -614,13 +644,9 @@ void AlarmClock(){
 	}
 }
 
-double volt;
-/*Энерго Сберегающий режим*/
-void powerSaveMode(){
-	double Vcc = 3.7;
-	int value = analogRead(0);
-	volt = (value / 1023.0) * Vcc; // правильно только если Vcc = 5.0В
+float powerSaveMode() {
 }
+/*Энерго Сберегающий режим*/
 
 /*Функция рестарта*/
 void(* resetFunc) (void) = 0;
@@ -681,15 +707,38 @@ void setup(){
 	10-секунда*/
 	loopTime = currentTime;
 	alarmSet = false;
+	//analogReference(DEFAULT);
+	//analogReference(INTERNAL);
+	//analogReference(EXTERNAL);
+	//voltage=analogRead(0);
+
+	//Serial.begin(9600);
+}
+float curV;
+const float typVbg = 1.179; // 1.0 -- 1.2
+double readVcc(){
+	float result = 0.0;
+	float tmp = 0.0;
+	ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+	delayMicroseconds(300);
+	ADCSRA |= _BV(ADSC);//Start conversion
+	while (bit_is_set(ADCSRA,ADSC));//measuring
+	uint8_t low  = ADCL;//must read ADCL first - it then locks ADCH
+	uint8_t high = ADCH;//unlocks both
+	tmp = (high<<8) | low;
+	tmp = (typVbg * 1023.0) / tmp;
+	result = result + tmp;
+	result = (result/100)*10+result;//более точно +10%
+	return result;
 }
 
 void loop(){
+	readVcc();
+	//powerSaveMode();
 	//Обновляем текущее время
 	currentTime = millis()/100;
 	//Затрагиваем time(255) так как иногда в меню терялась дата
 	time(255);
-	powerSaveMode();
-	//
 	AlarmClock();
 	//Если сервис. функция работает, тогда прерываем работу программы.
 	if(serviceWork==true) return;
@@ -1097,13 +1146,14 @@ void loop(){
 			resetFunc();
 			break;
 		case 13:
+		lcd.clearScreen();
 			lcd.setCursor(26,0);
 			lcd.setTextSize(1);
 			lcd.print("Information");
 			lcd.setCursor(2,16);
 			lcd.print("OS version");
 			lcd.setCursor(2,32);
-			lcd.print("0.7.1 beta");
+			lcd.print("0.7.2 beta");
 			lcd.setCursor(2,48);
 			lcd.print("SOC");
 			lcd.setCursor(2,64);
@@ -1111,8 +1161,7 @@ void loop(){
 			lcd.setCursor(2,80);
 			lcd.print("Free RAM");
 			lcd.setCursor(2,96);
-			//lcd.print(freeMemory());
-			lcd.print(volt);
+			lcd.print(readVcc());
 			break;
 	}
 }
