@@ -1,28 +1,13 @@
-// Basic Bluetooth sketch HC-05_01
-// Sends "Bluetooth Test" to the serial monitor and the software serial once every second.
-//
-// Connect the HC-05 module and data over Bluetooth
-//
-// The HC-05 defaults to commincation mode when first powered on.
-// The default baud rate for communication is 9600
-// Connect the HC-05 TX to Arduino pin 2 RX.
-// Connect the HC-05 RX to Arduino pin 3 TX through a voltage divider.
-//
-#include <SPI.h>
-int btData[8] = {0, 0, 0, 0, 0, 0, 0};//8, 16, ...
-long buffer;
-byte btCycle = 0;
-byte btStringLen = 0;
-byte btMax = 0;
-boolean	handler = false;
 
-void setup(){
-	Serial.begin(38400);
-}
+int btBuffer;
+int btData[4] = {0, 0, 0, 0};//4, 8, 16, ...
+byte btDataCycle = 0;
+byte btDataLen = 0;
+boolean btHandler = false;
+byte minutes = 32;
+byte hours = 22;
 
-/*String one = "a";
-String two = "b";*/
-byte ASCII(byte arg){
+byte ASCII(byte arg){//Функция перевода цифр из ASCII в DEC
 	switch(arg){
 		case 48:
 			return 0;
@@ -49,99 +34,61 @@ byte ASCII(byte arg){
 	}
 }
 
-void loop(){
-	if(Serial.available()){
-		Serial.println(Serial.read());
-	}
-	/*bluetooth.listen();
-	if(bluetooth.isListening()){
-		bluetooth.println(bluetooth.read());
-		delay(1000);
-	}
-	/*if(bluetooth.available()){
-		buffer=bluetooth.read();
-		bluetooth.println(buffer);
-		bluetooth.println("OKbbb\r\n");
-		/*buffer=ASCII(bluetooth.read());
-		if(buffer==46){//если равно '.'
-			btCycle++;
-			btStringLen=0;
-			bluetooth.println("\r\nbtAdd");
-			return;
-		}
-		if(buffer==47){//
-			btCycle=0;
-			btStringLen=0;
-			bluetooth.println(btData[0]);
-			bluetooth.println(".");
-			bluetooth.println(btData[1]);
-			bluetooth.println("\r\nSETTING SET");
-			return;
-		}
-		if(buffer!=46&&buffer!=47){
-			btData[btCycle]=buffer;
-		}
-		bluetooth.println(bluetooth.overflow());
-		bluetooth.println("\r\nOK");*/
-	//}
+void setup(){
+	Serial.begin(9600);
 }
 
 
+void bluetooth(){
+	if(Serial.available()){
+		btBuffer=Serial.read();
+		switch(btBuffer){
+			case 63:
+				Serial.println(hours);
+				Serial.print(":");
+				Serial.println(minutes);
+				break;
+			case 46:
+				btDataCycle++;
+				btDataLen=0;
+				break;
+			case 59://Если передан символ ';' означающий конец комманды
+				btBuffer=0;
+				btDataCycle=0;
+				btHandler=true;
+				Serial.print("SETTING TRANSFERRED\n\r");
+				Serial.println(btData[0]);
+				Serial.print(".");
+				Serial.println(btData[1]);
+				btRequestHandler();
+				break;
+			default:
+				if(btDataCycle==0){
+					btData[btDataCycle]=ASCII(btBuffer);
+				}
+				else{
+					btData[btDataCycle]=btData[btDataCycle]*10+ASCII(btBuffer);
+				}
+				btDataLen++;
+				break;
+		}
+	}
+}
 
-/*buffer=ASCII(bluetooth.read());
-		if(buffer==46){//если равно '.'
-			btCycle++;
-			btStringLen=0;
-		}
-		if(buffer==47){//
-			btCycle=0;
-			btStringLen=0;
-			bluetooth.println(btData[0]);
-			bluetooth.println("=");
-			bluetooth.println(btData[1]);
-			bluetooth.println("SETTING SET\r\n");
-			return;
-		}
-		if(buffer!=46&&buffer!=47){
-			btData[btCycle]=buffer;
-		}
-		bluetooth.println("OK\r\n");*/
-	/*bluetooth.println("\r\n");
-	bluetooth.println(btData[0], DEC);
-	bluetooth.println("\r\n");
-	bluetooth.println(btData[1], DEC);
-	bluetooth.println("\r\n");
-	bluetooth.println(btData[2], DEC);
-	bluetooth.println("\r\n");
-		delay(1000);*/
-/*if(btCycle<btMax&&handler==true){
-		btCycle++;
-		bluetooth.println(btData[btCycle]);
+
+void btRequestHandler(){
+	switch(btData[0]){
+		case 1:
+			minutes=btData[1];
+		break;
+		case 2:
+			hours=btData[1];
+		break;
 	}
-	else if(btCycle==0&&handler==true){
-		btCycle=0;
-		handler=false;
-}*/
-/*
-/*BTserial.println("1.24");
-    delay(1000);
-    if(BTserial.available()){
-        c[v] = BTserial.read();
-        if(BTserial.read()==1){
-      }
-    }
-    else{
-    	v=0;
-    }
-    if(bluetooth.available()&&handler==false){
-		btCycle++;
-		btData[btCycle] = bluetooth.read();
-		if(btData[btCycle]=='/'){
-			handler=true;
-			btMax=btCycle;
-			btCycle=0;
-			bluetooth.print("info=");
-		}
-	}
-	if(handler==false) return;
-*/
+	btData[0]=0;
+	btData[1]=0;
+}
+
+void loop(){
+	bluetooth();
+}
