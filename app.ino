@@ -1,10 +1,15 @@
 /*
-weOS ROM 0.7.2
+weOS ROM 0.7.3
 Board: Arduino UNO
 LCD: ILI9163C 1.44" 128x128
-<cg>
+<cg>DS1302s
 0.7 - New FONTS
 0.7.1 Fixed layout menu
+0.7.2 много тестов.
+0.7.3 упорядочены функции, добавлена функция измерения тока (beta)
+	millisDelay() переименована на millisDelay()
+	изменена ф-я DrawMenu(), теперь элементы меню - статика
+	изменена ф-я Alarm(), теперь отложение будильника в последнем блоке if (else if)
 </cg>
 */
 #include <SPI.h>
@@ -12,15 +17,13 @@ LCD: ILI9163C 1.44" 128x128
 #include <EEPROM.h>
 #include <MemoryFree.h>
 #include <TFT_ILI9163C.h>
-
+#include <HC05.h>
 /*
 w0.7.2 - beta (test bat v.1);
 use 14 600 байт (45%) memory device.
 vars use 1 190 байт (58%) dyn. mem.
 */
 /*
-#include <HC05.h>
-
 #ifdef HC05_SOFTWARE_SERIAL
 #include <SoftwareSerial.h>
 HC05 btSerial = HC05(A2, A5, A3, A4);  // cmd, state, rx, tx
@@ -28,11 +31,12 @@ HC05 btSerial = HC05(A2, A5, A3, A4);  // cmd, state, rx, tx
 HC05 btSerial = HC05(3, 2);  // cmd, state
 #endif
 */
+
 /*Analog Read начало*/
 //Исправление для более быстрой работы
 //http://geektimes.ru/post/255744/
 #define FASTADC 1
-// defines for setting and clearing register bits
+// defines for s  etting and clearing register bits
 #ifndef cbi
 #define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
 #endif
@@ -72,9 +76,13 @@ TFT_ILI9163C lcd = TFT_ILI9163C(__CS, __DC, __RST);
 
 /*Переменные*/
 /*Для работы с таймерами (?long?)*/
-unsigned int currentTime;
-unsigned int loopTime;
-unsigned int vov;
+long currentTime;
+long loopTime;
+long voltageTime;
+byte TimerButton;
+
+double voltage;
+
 /*Для работы с временем, датой*/
 volatile byte seconds;
 byte minutes;
@@ -83,14 +91,17 @@ byte day;
 byte numWeekDay;
 byte month;
 unsigned int year;
+
 /*Для работы с циферблатом, фикс даты*/
 byte minuteFixed = 0;
 byte hourFixed = 0;
 byte dayFixed = 0;
-/*Для отображения дат, месяца в буквах (хех)*/
+
+/*Для отображения дат, месяца в буквах*/
 const char* namesDays[] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
 const char* namesMonths[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 const byte daysinMonths[13] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+
 /*Для работы с будильником*/
 boolean alarmSet;//Установлен ли будильник true - да, false - нет
 byte vibrationCycle;//Цикл вибрации, на ноль есть действие, так что нужно обнулять
@@ -123,17 +134,14 @@ const byte ACDaysWeek = 16;
 const byte ACRepetition = 17;
 //const int noname reserv = 18;
 /*Байты для сохранения данных EEPROM*/
-//...
 //Экран
 byte brightness;
 byte backlightTimer;
-//...
+
 /*Для работы с настройками*/
 byte settingStep;
 byte currentPer;
 int fixedSetNum;//Фиксированная цифра настроек (для удаление прошлой)
-/*Питание*/
-double voltage;
 
 /*Прочее*/
 boolean devMode = false;//Деволперский режим
@@ -143,21 +151,21 @@ boolean renderingStatics = false;//Отрисовка статических и�
 boolean serviceWork = false;//Работа какого то сервиса который может выполнятся в момент работы другой программы, например будильник
 
 /*Переменные для работы меню/c меню*/
-//основа построения меню была взята с geektimes.ru
+//Основа построения меню была взята с geektimes.ru
 //http://geektimes.ru/post/255408/
-char* MenuName[14];//Имя меню
+char* MenuName[15];//Имя меню
 //MenuType = 0;// - циферблат
 //MenuType = 1;// - стандартное меню с дочерними элементами
 //MenuType = 2;// - элементы БЕЗ дочерних элементов
-byte MenuType[14];//Тип меню
-byte MenuParent[14];//Родитель меню
-byte MenuChildFirst[14];//Первый потомок
-byte MenuChildLast[14];//Последний потомок
+byte MenuType[15];//Тип меню
+byte MenuParent[15];//Родитель меню
+byte MenuChildFirst[15];//Первый потомок
+byte MenuChildLast[15];//Последний потомок
 /**Переменные для работы навигации в меню**/
 unsigned int MenuLevel = 0;//Уровень меню (от ok, back)
 byte MenuCurPos = 0;//Текущее положение курсора (от up, down)
-byte TimerButton;
 
+/*Заполнение меню*/
 void MenuSetup(){
 	/*
 	MenuName[]="";
@@ -192,7 +200,7 @@ void MenuSetup(){
 	MenuChildLast[3]=11;
 
 	MenuName[4]="Bluetooth";
-	MenuType[4]=1;
+	MenuType[4]=2;
 	MenuParent[4]=1;
 	MenuChildFirst[4]=0;
 	MenuChildLast[4]=0;
@@ -201,7 +209,7 @@ void MenuSetup(){
 	MenuType[5]=1;
 	MenuParent[5]=1;
 	MenuChildFirst[5]=12;
-	MenuChildLast[5]=13;
+	MenuChildLast[5]=14;
 
 	MenuName[6]="Alarm";
 	MenuType[6]=7;
@@ -239,210 +247,23 @@ void MenuSetup(){
 	//MenuChildFirst[11]=;
 	//MenuChildLast[11]=;
 
-	MenuName[12]="Reboot";
+	MenuName[12]="Battery";
 	MenuType[12]=2;
 	MenuParent[12]=5;
 	MenuChildFirst[12]=0;
 	MenuChildLast[12]=0;
 
-	MenuName[13]="Information";
+	MenuName[13]="Reboot";
 	MenuType[13]=2;
 	MenuParent[13]=5;
 	MenuChildFirst[13]=0;
 	MenuChildLast[13]=0;
-}
 
-boolean pressed(byte button){//Возращает true если кнопка нажата
-	if(analogRead(button)==0) return true;
-	else return false;
-}
-
-boolean buttonDelay(byte delay){//Возращает true если таймер нажатия кнопки прошёл
-	if(currentTime>=loopTime+delay){
-		loopTime=currentTime;
-		return true;
-	}
-	else return false;
-}
-
-/*Отрисовка меню*/
-void DrawMenu(){
-	lcd.setTextSize(1);
-	if(!renderingStatics){
-		renderingStatics=true;
-		byte menuCursorPos=1;//Позиция курсора в принте меню
-		for(int i=MenuChildFirst[MenuLevel];i<MenuChildLast[MenuLevel]+1;i++){
-			lcd.setCursor(3,menuCursorPos);
-			menuCursorPos=menuCursorPos+16;//Если надумаю ставить название меню просто поменять принт и сложение местами
-			lcd.print(MenuName[i]);
-		}
-	}
-	lcd.drawFastVLine(0,MenuCurPos*16+3,14,WHITE);
-}
-
-void ListSettings(){
-	lcd.setTextSize(1);//10+6
-	if(!renderingStatics){
-		lcd.setCursor(32,2);
-		lcd.print("Backlight");
-		lcd.setCursor(3,18);
-		lcd.print("1min");
-		lcd.setCursor(3,34);
-		lcd.print("5min");
-		lcd.setCursor(3,50);
-		lcd.print("10min");
-		lcd.setCursor(3,66);
-		lcd.print("30min");
-		lcd.setCursor(3,82);
-		lcd.print("off");
-		switch(backlightTimer){//устанавливаем курсор
-			case 6://1min
-				MenuCurPos=1;
-				break;
-			case 30://5min
-				MenuCurPos=2;
-				break;
-			case 60://10min
-				MenuCurPos=3;
-				break;
-			case 180://30min
-				MenuCurPos=4;
-				break;
-			default://0
-				MenuCurPos=5;
-				break;
-		}
-		renderingStatics=true;
-	}
-	if(MenuCurPos==0) MenuCurPos=1;
-	lcd.drawFastVLine(0,MenuCurPos*16+4,14,WHITE);
-}
-
-void BandSettings(){
-	currentPer=brightness*100/240;
-	if(!renderingStatics){
-		lcd.setTextSize(1);
-		lcd.setCursor(27,3);
-		lcd.print("Brightness");
-		lcd.fillRect(4, 69, 1.2*currentPer, 10, WHITE);
-		renderingStatics=true;
-	}
-	if(currentPer!=fixedSetNum){
-		lcd.setTextColor(BLACK);
-		if(fixedSetNum==100){
-			lcd.setCursor(50,45);
-		}
-		else if(fixedSetNum<10){
-			lcd.setCursor(59,45);
-		}
-		else{
-			lcd.setCursor(55,45);
-		}
-		lcd.print(fixedSetNum);
-		if(currentPer<fixedSetNum){
-			lcd.fillRect(1.2*currentPer+6, 69, 6, 10, BLACK);//ТЕСТ скобки
-		}
-		else if(currentPer>fixedSetNum){
-			lcd.fillRect(1.2*currentPer-2, 69, 6, 10, WHITE);
-		}
-		fixedSetNum=currentPer;
-
-	}
-	lcd.setTextColor(WHITE);
-	if(fixedSetNum==100){
-		lcd.setCursor(50,45);
-	}
-	else if(fixedSetNum<10){
-		lcd.setCursor(59,45);
-	}
-	else{
-		lcd.setCursor(55,45);
-	}
-	lcd.print(currentPer);
-}
-
-void TimeSettings(){
-	lcd.setTextSize(1);
-	lcd.setTextColor(WHITE);
-	if(renderingStatics==false){
-		lcd.setCursor(46,3);
-		lcd.print("Time");
-		renderingStatics=true;
-	}
-	//main
-	lcd.setCursor(44,55);
-	if(time(4)<10) lcd.print("0");
-	lcd.print(time(4));
-	lcd.print(":");
-	if(time(5)<10) lcd.print("0");
-	lcd.print(time(5));
-	switch(settingStep){
-		case 0:
-			lcd.drawFastHLine(44, 72, 18, WHITE);
-			break;
-		case 1:
-			lcd.drawFastHLine(66, 72, 18, WHITE);
-			break;
-	}
-}
-
-void DateSettings(){
-	lcd.setTextSize(1);
-	lcd.setTextColor(WHITE);
-	if(renderingStatics==false){
-		lcd.setCursor(47,3);
-		lcd.print("Date");
-		renderingStatics=true;
-	}
-	//День месяца
-	lcd.setCursor(10,56);
-	lcd.print(namesDays[time(3)-1]);
-	//Дата
-	lcd.setCursor(52,56);
-	if(time(2)<10){
-		lcd.print("0");
-	}
-	lcd.print(time(2));
-	//Месяц
-	lcd.setCursor(84,56);
-	lcd.print(namesMonths[time(1)-1]);
-	switch(settingStep){
-		case 0:
-			lcd.drawFastHLine(10, 74, 34, WHITE);
-			break;
-		case 1:
-			lcd.drawFastHLine(52, 74, 22, WHITE);
-			break;
-
-		case 2:
-			lcd.drawFastHLine(84, 74, 34, WHITE);
-			break;
-	}
-}
-
-void AlarmSettings(){
-	lcd.setTextSize(1);
-	lcd.setTextColor(WHITE);
-	if(renderingStatics==false){
-		lcd.setCursor(44,3);
-		lcd.print("Alarm");
-		renderingStatics=true;
-	}
-	//main
-	lcd.setCursor(44,55);
-	if(alarmHour<10) lcd.print("0");
-	lcd.print(alarmHour);
-	lcd.print(":");
-	if(alarmMinute<10) lcd.print("0");
-	lcd.print(alarmMinute);
-	switch(settingStep){
-		case 0:
-			lcd.drawFastHLine(44, 72, 18, WHITE);
-			break;
-		case 1:
-			lcd.drawFastHLine(66, 72, 18, WHITE);
-			break;
-	}
+	MenuName[14]="Information";
+	MenuType[14]=2;
+	MenuParent[14]=5;
+	MenuChildFirst[14]=0;
+	MenuChildLast[14]=0;
 }
 
 /*Добавление секунд (для MsTimer2)*/
@@ -505,6 +326,7 @@ unsigned int time(byte arg){
 	}
 }
 
+/*Циферблат*/
 void DigitalClockFace(){
 	//Правая колонка
 	if(time(2)!=dayFixed||!printDates){
@@ -523,7 +345,7 @@ void DigitalClockFace(){
 		lcd.print(namesMonths[time(1)-1]);
 		//
 		lcd.setCursor(66,78);
-		lcd.print(analogRead(0));
+		//lcd.print(analogRead(0));
 		if(alarmSet) lcd.print("@");
 		if(voltage>=4.0){
 			lcd.setTextColor(GREEN);
@@ -585,7 +407,206 @@ void DigitalClockFace(){
 		if(time(5)<10) lcd.print("0");
 		lcd.print(time(5));
 		if(!printDates) printDates=true;
-		//lcd.setAddrWindow(0,0,64,64);
+	}
+}
+
+/*Функция определения статуса кнопки*/
+boolean pressed(byte button){//Возращает true если кнопка нажата
+	if(analogRead(button)==0) return true;
+	else return false;
+}
+
+/*Функция пауз для кнопок*/
+boolean millisDelay(byte delay){//Возращает true если таймер нажатия кнопки прошёл
+	if(currentTime>=loopTime+delay){
+		loopTime=currentTime;
+		return true;
+	}
+	else return false;
+}
+
+/*Отрисовка меню*/
+void DrawMenu(){
+	lcd.setTextSize(1);
+	if(!renderingStatics){
+		byte menuCursorPos=1;//Позиция курсора в принте меню
+		for(int i=MenuChildFirst[MenuLevel];i<MenuChildLast[MenuLevel]+1;i++){
+			lcd.setCursor(3,menuCursorPos);
+			menuCursorPos=menuCursorPos+16;//Если надумаю ставить название меню просто поменять принт и сложение местами
+			lcd.print(MenuName[i]);
+		}
+		renderingStatics=true;
+	}
+	lcd.drawFastVLine(0,MenuCurPos*16+3,14,WHITE);
+}
+
+/*Настройки таймаута экрана, пунктирная настройка*/
+void ListSettings(){
+	lcd.setTextSize(1);//10+6
+	if(!renderingStatics){
+		lcd.setCursor(32,2);
+		lcd.print("Backlight");
+		lcd.setCursor(3,18);
+		lcd.print("1min");
+		lcd.setCursor(3,34);
+		lcd.print("5min");
+		lcd.setCursor(3,50);
+		lcd.print("10min");
+		lcd.setCursor(3,66);
+		lcd.print("30min");
+		lcd.setCursor(3,82);
+		lcd.print("off");
+		switch(backlightTimer){//устанавливаем курсор
+			case 6://1min
+				MenuCurPos=1;
+				break;
+			case 30://5min
+				MenuCurPos=2;
+				break;
+			case 60://10min
+				MenuCurPos=3;
+				break;
+			case 180://30min
+				MenuCurPos=4;
+				break;
+			default://0
+				MenuCurPos=5;
+				break;
+		}
+		renderingStatics=true;
+	}
+	if(MenuCurPos==0) MenuCurPos=1;
+	lcd.drawFastVLine(0,MenuCurPos*16+4,14,WHITE);
+}
+
+/*Настройка яркости, полосочная настройка*/
+void BandSettings(){
+	currentPer=brightness*100/240;
+	if(!renderingStatics){
+		lcd.setTextSize(1);
+		lcd.setCursor(27,3);
+		lcd.print("Brightness");
+		lcd.fillRect(4, 69, 1.2*currentPer, 10, WHITE);
+		renderingStatics=true;
+	}
+	if(currentPer!=fixedSetNum){
+		lcd.setTextColor(BLACK);
+		if(fixedSetNum==100){
+			lcd.setCursor(50,45);
+		}
+		else if(fixedSetNum<10){
+			lcd.setCursor(59,45);
+		}
+		else{
+			lcd.setCursor(55,45);
+		}
+		lcd.print(fixedSetNum);
+		if(currentPer<fixedSetNum){
+			lcd.fillRect(1.2*currentPer+6, 69, 6, 10, BLACK);//ТЕСТ скобки
+		}
+		else if(currentPer>fixedSetNum){
+			lcd.fillRect(1.2*currentPer-2, 69, 6, 10, WHITE);
+		}
+		fixedSetNum=currentPer;
+
+	}
+	lcd.setTextColor(WHITE);
+	if(fixedSetNum==100){
+		lcd.setCursor(50,45);
+	}
+	else if(fixedSetNum<10){
+		lcd.setCursor(59,45);
+	}
+	else{
+		lcd.setCursor(55,45);
+	}
+	lcd.print(currentPer);
+}
+
+/*Настройка времени*/
+void TimeSettings(){
+	lcd.setTextSize(1);
+	lcd.setTextColor(WHITE);
+	if(!renderingStatics){
+		lcd.setCursor(46,3);
+		lcd.print("Time");
+		renderingStatics=true;
+	}
+	//main
+	lcd.setCursor(44,55);
+	if(time(4)<10) lcd.print("0");
+	lcd.print(time(4));
+	lcd.print(":");
+	if(time(5)<10) lcd.print("0");
+	lcd.print(time(5));
+	switch(settingStep){
+		case 0:
+			lcd.drawFastHLine(44, 72, 18, WHITE);
+			break;
+		case 1:
+			lcd.drawFastHLine(66, 72, 18, WHITE);
+			break;
+	}
+}
+
+/*Настройки даты*/
+void DateSettings(){
+	lcd.setTextSize(1);
+	lcd.setTextColor(WHITE);
+	if(!renderingStatics){
+		lcd.setCursor(47,3);
+		lcd.print("Date");
+		renderingStatics=true;
+	}
+	//День месяца
+	lcd.setCursor(10,56);
+	lcd.print(namesDays[time(3)-1]);
+	//Дата
+	lcd.setCursor(52,56);
+	if(time(2)<10){
+		lcd.print("0");
+	}
+	lcd.print(time(2));
+	//Месяц
+	lcd.setCursor(84,56);
+	lcd.print(namesMonths[time(1)-1]);
+	switch(settingStep){
+		case 0:
+			lcd.drawFastHLine(10, 74, 34, WHITE);
+			break;
+		case 1:
+			lcd.drawFastHLine(52, 74, 22, WHITE);
+			break;
+
+		case 2:
+			lcd.drawFastHLine(84, 74, 34, WHITE);
+			break;
+	}
+}
+
+/*Настройки будильника*/
+void AlarmSettings(){
+	lcd.setTextSize(1);
+	lcd.setTextColor(WHITE);
+	if(renderingStatics==false){
+		lcd.setCursor(44,3);
+		lcd.print("Alarm");
+		renderingStatics=true;
+	}
+	//main
+	lcd.setCursor(44,55);
+	if(alarmHour<10) lcd.print("0");
+	lcd.print(alarmHour);
+	lcd.print(":");
+	if(alarmMinute<10) lcd.print("0");
+	lcd.print(alarmMinute);
+	switch(settingStep){
+		case 0:
+			lcd.drawFastHLine(44, 72, 18, WHITE);
+			break;
+		case 1:
+			lcd.drawFastHLine(66, 72, 18, WHITE);
+			break;
 	}
 }
 
@@ -607,7 +628,7 @@ void AlarmClock(){
 			lcd.print(alarmMinute);
 			serviceWork=true;//Сервис работает
 		}
-		if(pressed(ok)&&buttonDelay(1)){//Если нажата кнопка ok во время звонка будильника
+		if(pressed(ok)&&millisDelay(1)){//Если нажата кнопка ok во время звонка будильника
 			lcd.clearScreen();
 			analogWrite(5,0);
 			vibrationCycle=0;
@@ -616,7 +637,7 @@ void AlarmClock(){
 			printDates=false;
 			renderingStatics=false;
 		}
-		if(pressed(back)&&buttonDelay(1)){//Если нажата кнопка ok во время звонка будильника
+		if(pressed(back)&&millisDelay(1)){//Если нажата кнопка ok во время звонка будильника
 			lcd.clearScreen();//Очищаем дисплей
 			analogWrite(5,0);//Выключаем вибромотор
 			alarmMinute+=5;
@@ -626,7 +647,7 @@ void AlarmClock(){
 			printDates=false;//Даём комманды на то что даты не отрисованы, нужно перерисовать
 			renderingStatics=false;//Отрисовка статики не выполнена
 		}
-		if(buttonDelay(10)){//Работа вибромотора, добавление 1 цикла по истечению таймера в 1сек. (bD - экономия места)
+		if(millisDelay(10)){//Работа вибромотора, добавление 1 цикла по истечению таймера в 1сек. (bD - экономия места)
 			vibrationCycle++;
 			if(vibrationCycle>7) vibrationCycle=1;
 			analogWrite(5, vibrationMode[vibrationCycle-1]);
@@ -644,102 +665,88 @@ void AlarmClock(){
 	}
 }
 
-float powerSaveMode() {
+/*Функция подсчёта питающего напряжения*/
+float readVcc(){
+	ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+	delayMicroseconds(300);
+	ADCSRA |= _BV(ADSC); // начало преобразований
+	while (bit_is_set(ADCSRA, ADSC)); // измерение
+	uint8_t low = ADCL; // сначала нужно прочесть ADCL - это запирает ADCH
+	uint8_t high = ADCH; // разлочить оба
+	float result = (high<<8) | low;
+	result = (1.1 * 1023.0) / result; // Результат Vcc в милливольтах
+	voltage = result-0.03;//Переносим результат в глобальную переменную voltage
 }
-/*Энерго Сберегающий режим*/
 
 /*Функция рестарта*/
 void(* resetFunc) (void) = 0;
 
 void setup(){
-	/*Таймер часов*/
-	MsTimer2::set(993, timerSeconds);//993-16mHz
+	/*Таймер*/
+	MsTimer2::set(993, timerSeconds);
 	MsTimer2::start();
-	/*Serial порт*/
-	//Serial.begin(9600);
-	/*чтение EEPROM*/
-	//Время
-	seconds=50;
-	minutes=EEPROM.read(minuteAddress);
-	hours=EEPROM.read(hourAddress);
-	day=EEPROM.read(dayAddress);
-	numWeekDay=EEPROM.read(numWeekDayAddress);
-	month=EEPROM.read(monthAddress);//7[proverka]
-	year=2016;
+	/*Установка типа пинов*/
+	//Аналоговые
+	pinMode(A0, INPUT);
+	pinMode(A1, INPUT);
+	pinMode(A2, INPUT);
+	pinMode(A3, INPUT);
+	pinMode(A4, INPUT);
+	//Цифровые
+	pinMode(backlight, OUTPUT);
+	pinMode(vibration, OUTPUT);
+	/*Чтение EEPROM*/
+	//Яркость
+	brightness=EEPROM.read(brightnessAddress);
+	backlightTimer=EEPROM.read(backlightTimerAddress);//(6 хранится 120 на выходе)*10*2
 	//Будильник
 	alarmMinute=EEPROM.read(ACMinute);
 	alarmHour=EEPROM.read(ACHour);
+	//Установка времени
+	year=2016;
+	month=EEPROM.read(monthAddress);//7[proverka]
+	numWeekDay=EEPROM.read(numWeekDayAddress);
+	day=EEPROM.read(dayAddress);
+	hours=EEPROM.read(hourAddress);
+	minutes=EEPROM.read(minuteAddress);
+	seconds=50;
+	/*Установка значений из памяти*/
 	//Яркость
-	brightness=EEPROM.read(brightnessAddress);
-	brightness=50;
-	backlightTimer=EEPROM.read(backlightTimerAddress);//(6 хранится 120 на выходе)*10*2
-	pinMode(backlight, OUTPUT);
-	analogWrite(backlight, brightness);
-	/*Инциализация экрана*/
-	lcd.begin();
-	//lcd.setRotation(2);
-	//lcd.setFont(&defaultFont);
-	//lcd.setFont(&arial_dig);
-	/*Установка типа пинов*/
-	//Аналоговые
-	pinMode(A1, INPUT);
-	pinMode(A2, INPUT);
-	pinMode(A3, INPUT);//to 3
-	pinMode(A4, INPUT);
-	//Цифровые
-	minutes=59;
-	pinMode(vibration, OUTPUT);
-	/*DevMode включчение при зажатии кнопок back и ok*/
-	if(analogRead(back)==0&&digitalRead(ok)==0){
-		devMode = true;
-	}
-	/*Инциализация меню*/
-	MenuSetup();
-	/*Установка fix-дат*/
-	minuteFixed=time(5);
+	analogReference(INTERNAL);
+	/*Установка переменных*/
+	//Фиксированные даты
+	dayFixed=time(2);
 	hourFixed=time(4);
-	dayFixed=time(2);//раньше не стояла, нужно проверить
-	/*Установка значений для таймеров*/
+	minuteFixed=time(5);
+	//Таймеры millis
 	currentTime = millis()/100;
-	/*1sec = 1000ms
-	1000/10=10hs
-	5-пол секунды
-	10-секунда*/
 	loopTime = currentTime;
-	alarmSet = false;
-	//analogReference(DEFAULT);
-	//analogReference(INTERNAL);
-	//analogReference(EXTERNAL);
-	//voltage=analogRead(0);
-
-	//Serial.begin(9600);
-}
-float curV;
-const float typVbg = 1.179; // 1.0 -- 1.2
-double readVcc(){
-	float result = 0.0;
-	float tmp = 0.0;
-	ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
-	delayMicroseconds(300);
-	ADCSRA |= _BV(ADSC);//Start conversion
-	while (bit_is_set(ADCSRA,ADSC));//measuring
-	uint8_t low  = ADCL;//must read ADCL first - it then locks ADCH
-	uint8_t high = ADCH;//unlocks both
-	tmp = (high<<8) | low;
-	tmp = (typVbg * 1023.0) / tmp;
-	result = result + tmp;
-	result = (result/100)*10+result;//более точно +10%
-	return result;
+	voltageTime = currentTime;
+	//Прочие перменные
+	alarmSet=false;
+	/*Выполнение функций*/
+	MenuSetup();
+	readVcc();
+	delay(1);
+	/*Инциализация дисплея*/
+	lcd.begin();
+	analogWrite(backlight, brightness);
 }
 
 void loop(){
-	readVcc();
 	//powerSaveMode();
 	//Обновляем текущее время
 	currentTime = millis()/100;
 	//Затрагиваем time(255) так как иногда в меню терялась дата
 	time(255);
 	AlarmClock();
+	if(voltage<=2.9){
+		//analogWrite(backlight, 0);
+	}
+	if(currentTime>=voltageTime+600){//раз в ~60секунд пересчитывать напряжение
+		voltageTime=currentTime;
+		readVcc();
+	}
 	//Если сервис. функция работает, тогда прерываем работу программы.
 	if(serviceWork==true) return;
 	if(backlightTimer!=0&&currentTime>=loopTime+backlightTimer*100&&MenuLevel>0){
@@ -772,7 +779,7 @@ void loop(){
 			break;
 	}
 	//Обработка кнопок
-	if(pressed(ok)&&buttonDelay(TimerButton)&&MenuType[MenuLevel]!=2){
+	if(pressed(ok)&&millisDelay(TimerButton)&&MenuType[MenuLevel]!=2){
 		renderingStatics=false;
 		switch(MenuType[MenuLevel]){
 			case 3:
@@ -850,7 +857,7 @@ void loop(){
 				break;
 		}
 	}
-	if(pressed(back)&&buttonDelay(TimerButton)&&MenuLevel!=0){
+	if(pressed(back)&&millisDelay(TimerButton)&&MenuLevel!=0){
 		renderingStatics=false;
 		switch(MenuType[MenuLevel]){
 			case 5://Время
@@ -891,7 +898,7 @@ void loop(){
 				break;
 		}
 	}
-	if(pressed(up)&&buttonDelay(TimerButton)){
+	if(pressed(up)&&millisDelay(TimerButton)){
 		switch(MenuType[MenuLevel]){
 			case 1://Меню
 				MenuCurPos--;
@@ -996,7 +1003,7 @@ void loop(){
 				break;
 		}
 	}
-	if(pressed(down)&&buttonDelay(TimerButton)){
+	if(pressed(down)&&millisDelay(TimerButton)){
 		switch(MenuType[MenuLevel]){
 			case 1://Меню
 				MenuCurPos++;
@@ -1137,31 +1144,34 @@ void loop(){
 			}
 			break;
 		case 4:
+			renderingStatics=false;
 			MenuCurPos=MenuLevel-MenuChildFirst[MenuParent[MenuLevel]];
 			MenuLevel=MenuParent[MenuLevel];
 			lcd.clearScreen();
 			break;
-		case 12:
+		case 13:
 			analogWrite(backlight, 0);
 			resetFunc();
 			break;
-		case 13:
-		lcd.clearScreen();
-			lcd.setCursor(26,0);
-			lcd.setTextSize(1);
-			lcd.print("Information");
-			lcd.setCursor(2,16);
-			lcd.print("OS version");
-			lcd.setCursor(2,32);
-			lcd.print("0.7.2 beta");
-			lcd.setCursor(2,48);
-			lcd.print("SOC");
-			lcd.setCursor(2,64);
-			lcd.print("ATmega328p");
-			lcd.setCursor(2,80);
-			lcd.print("Free RAM");
-			lcd.setCursor(2,96);
-			lcd.print(readVcc());
+		case 14:
+			if(!renderingStatics){
+				lcd.setCursor(26,0);
+				lcd.setTextSize(1);
+				lcd.print("Information");
+				lcd.setCursor(2,16);
+				lcd.print("OS version");
+				lcd.setCursor(2,32);
+				lcd.print("0.7.3 beta");
+				lcd.setCursor(2,48);
+				lcd.print("SOC");
+				lcd.setCursor(2,64);
+				lcd.print("ATmega328p");
+				lcd.setCursor(2,80);
+				lcd.print("Free RAM");
+				lcd.setCursor(2,96);
+				lcd.print(voltage);
+				renderingStatics=true;
+			}
 			break;
 	}
 }
