@@ -1,8 +1,8 @@
 /*
-weOS ROM 0.7.3
+weOS ROM 0.8
 Board: Arduino UNO
 LCD: ILI9163C 1.44" 128x128
-<cg>DS1302s
+<cl>DS1302s
 0.7 - New FONTS
 0.7.1 Fixed layout menu
 0.7.2 много тестов.
@@ -10,28 +10,16 @@ LCD: ILI9163C 1.44" 128x128
 	millisDelay() переименована на millisDelay()
 	изменена ф-я DrawMenu(), теперь элементы меню - статика
 	изменена ф-я Alarm(), теперь отложение будильника в последнем блоке if (else if)
-</cg>
+0.7.3 - добавлен bluetooth (beta) и комманды
+0.8 - bluetooth (stable)
+	повышена чуствительность кнопок (в функции переведено значение с 0 на 10)
+</cl>
 */
 #include <SPI.h>
 #include <MsTimer2.h>
 #include <EEPROM.h>
 #include <MemoryFree.h>
 #include <TFT_ILI9163C.h>
-#include <HC05.h>
-/*
-w0.7.2 - beta (test bat v.1);
-use 14 600 байт (45%) memory device.
-vars use 1 190 байт (58%) dyn. mem.
-*/
-/*
-#ifdef HC05_SOFTWARE_SERIAL
-#include <SoftwareSerial.h>
-HC05 btSerial = HC05(A2, A5, A3, A4);  // cmd, state, rx, tx
-#else
-HC05 btSerial = HC05(3, 2);  // cmd, state
-#endif
-*/
-
 /*Analog Read начало*/
 //Исправление для более быстрой работы
 //http://geektimes.ru/post/255744/
@@ -51,6 +39,8 @@ HC05 btSerial = HC05(3, 2);  // cmd, state
 #define ok 2
 #define up 3//to 3
 #define down 4
+//Прочее (digital)
+#define bluetoothPower 7
 //Прочее (digital ШИМ)
 #define vibration 5//3old
 #define backlight 9
@@ -347,7 +337,7 @@ void DigitalClockFace(){
 		lcd.setCursor(66,78);
 		//lcd.print(analogRead(0));
 		if(alarmSet) lcd.print("@");
-		if(voltage>=4.0){
+		/*if(voltage>=4.0){
 			lcd.setTextColor(GREEN);
 			lcd.print("{");
 			lcd.setTextColor(WHITE);
@@ -361,7 +351,7 @@ void DigitalClockFace(){
 			lcd.setTextColor(RED);
 			lcd.print("`");
 			lcd.setTextColor(WHITE);
-		}
+		}*/
 		//Обновляем переменную
 		dayFixed=time(2);
 	}
@@ -370,12 +360,10 @@ void DigitalClockFace(){
 		lcd.setTextSize(2);
 		lcd.setTextColor(BLACK);
 		lcd.setCursor(30,32);
-		if(time(4)<10&&time(4)!=0){
-			lcd.setCursor(48,32);//fixed
+		if(hourFixed<10&&time(4)!=0){//time(4)!=для 23, 59 и прочих
+			if(time(4)<10) lcd.setCursor(48,32);//fixed
+			else lcd.print("0");
 			lcd.print(hourFixed);
-		}
-		else if(time(4)==10){
-			lcd.print("09");
 		}
 		else{
 			lcd.print(hourFixed);
@@ -391,12 +379,10 @@ void DigitalClockFace(){
 		lcd.setTextSize(2);
 		lcd.setTextColor(BLACK);
 		lcd.setCursor(30,62);
-		if(time(5)<10&&time(5)!=0){
-			lcd.setCursor(48,62);
+		if(minuteFixed<10&&time(5)!=0){
+			if(time(5)<10) lcd.setCursor(48,62);
+			else lcd.print("0");
 			lcd.print(minuteFixed);
-		}
-		else if(time(5)==10){
-			lcd.print("09");
 		}
 		else{
 			lcd.print(minuteFixed);
@@ -412,8 +398,9 @@ void DigitalClockFace(){
 
 /*Функция определения статуса кнопки*/
 boolean pressed(byte button){//Возращает true если кнопка нажата
-	if(analogRead(button)==0) return true;
+	if(analogRead(button)<=10) return true;
 	else return false;
+	//if(debugging) Serial.println(analogRead(button));
 }
 
 /*Функция пауз для кнопок*/
@@ -678,6 +665,123 @@ float readVcc(){
 	voltage = result-0.03;//Переносим результат в глобальную переменную voltage
 }
 
+int btBuffer;
+int btData[2] = {0, 0};//2, 4, 8, 16, ...
+byte btDataCycle = 0;
+byte btDataLen = 0;
+
+/**/
+void bluetooth(){
+	if(Serial.available()){
+		btBuffer=Serial.read();
+		switch(btBuffer){
+			case 35:// '#'
+				Serial.print("minutes:1\n\rhours:2\n\rday:3\n\rwd:4\n\rmnt:5\n\r");
+				break;
+			case 37:// '%' - voltage
+				Serial.print("\nVoltage:");
+				Serial.println(voltage);
+				break;
+			case 33:
+				Serial.println(hourFixed);
+				Serial.print(":");
+				Serial.println(minuteFixed);
+				break;
+			case 63:
+				Serial.println(hours);
+				Serial.print(":");
+				Serial.println(minutes);
+				break;
+			case 46://'.'
+				btDataCycle++;
+				btDataLen=0;
+				break;
+			case 59://Если передан символ ';' означающий конец комманды
+				btBuffer=0;
+				btDataCycle=0;
+				btDataLen=0;
+				//btHandler=true;
+				Serial.print("SETTING TRANSFERRED\n\r");
+				Serial.println(btData[0]);
+				Serial.print(".");
+				Serial.println(btData[1]);
+				btRequestHandler();
+				break;
+			default:
+				if(btDataLen==0){
+					btData[btDataCycle]=ASCII(btBuffer);
+				}
+				else{
+					btData[btDataCycle]=btData[btDataCycle]*10+ASCII(btBuffer);
+				}
+				btDataLen++;
+				break;
+		}
+	}
+}
+
+/*Обработчик блютуз-запросов*/
+void btRequestHandler(){
+	switch(btData[0]){
+		case 1:
+			EEPROM.write(minuteAddress,btData[1]);
+			minutes=btData[1];
+			btData[1]=0;
+		break;
+		case 2:
+			EEPROM.write(hourAddress,btData[1]);
+			hours=btData[1];
+			btData[1]=0;
+		break;
+		case 3:
+			EEPROM.write(dayAddress,btData[1]);
+			day=btData[1];
+			btData[1]=0;
+			printDates=false;
+			break;
+		case 4:
+			EEPROM.write(numWeekDayAddress,btData[1]);
+			numWeekDay=btData[1];
+			btData[1]=0;
+			printDates=false;
+			break;
+		case 5:
+			EEPROM.write(monthAddress,btData[1]);
+			month=btData[1];
+			btData[1]=0;
+			printDates=false;
+			break;
+	}
+}
+
+/*Функция перевода цифровых символов из ASCII понятную систему*/
+byte ASCII(byte arg){
+	switch(arg){
+		case 48:
+			return 0;
+		case 49:
+			return 1;
+		case 50:
+			return 2;
+		case 51:
+			return 3;
+		case 52:
+			return 4;
+		case 53:
+			return 5;
+		case 54:
+			return 6;
+		case 55:
+			return 7;
+		case 56:
+			return 8;
+		case 57:
+			return 9;
+		default:
+			return arg;
+	}
+}
+
 /*Функция рестарта*/
 void(* resetFunc) (void) = 0;
 
@@ -685,7 +789,8 @@ void setup(){
 	/*Таймер*/
 	MsTimer2::set(993, timerSeconds);
 	MsTimer2::start();
-	/*Установка типа пинов*/
+	/*Установка Serial*/
+	Serial.begin(9600);
 	//Аналоговые
 	pinMode(A0, INPUT);
 	pinMode(A1, INPUT);
@@ -693,6 +798,7 @@ void setup(){
 	pinMode(A3, INPUT);
 	pinMode(A4, INPUT);
 	//Цифровые
+	pinMode(bluetoothPower, OUTPUT);
 	pinMode(backlight, OUTPUT);
 	pinMode(vibration, OUTPUT);
 	/*Чтение EEPROM*/
@@ -738,17 +844,17 @@ void loop(){
 	//Обновляем текущее время
 	currentTime = millis()/100;
 	//Затрагиваем time(255) так как иногда в меню терялась дата
-	time(255);
 	AlarmClock();
-	if(voltage<=2.9){
-		//analogWrite(backlight, 0);
-	}
+	//Если сервис. функция работает, тогда прерываем работу программы.
+	if(serviceWork==true) return;
+	time(255);
 	if(currentTime>=voltageTime+600){//раз в ~60секунд пересчитывать напряжение
 		voltageTime=currentTime;
 		readVcc();
 	}
-	//Если сервис. функция работает, тогда прерываем работу программы.
-	if(serviceWork==true) return;
+
+	bluetooth();///////////////////////////TEST
+
 	if(backlightTimer!=0&&currentTime>=loopTime+backlightTimer*100&&MenuLevel>0){
 		printDates=false;
 		MenuLevel=0;
@@ -1110,7 +1216,6 @@ void loop(){
 				break;
 		}
 	}
-	//
 	switch(MenuType[MenuLevel]){
 		case 0://Часы
 			DigitalClockFace();
@@ -1159,9 +1264,9 @@ void loop(){
 				lcd.setTextSize(1);
 				lcd.print("Information");
 				lcd.setCursor(2,16);
-				lcd.print("OS version");
+				lcd.print("ROM version");
 				lcd.setCursor(2,32);
-				lcd.print("0.7.3 beta");
+				lcd.print("0.8 beta");
 				lcd.setCursor(2,48);
 				lcd.print("SOC");
 				lcd.setCursor(2,64);
@@ -1169,7 +1274,8 @@ void loop(){
 				lcd.setCursor(2,80);
 				lcd.print("Free RAM");
 				lcd.setCursor(2,96);
-				lcd.print(voltage);
+				lcd.print(freeMemory());
+				lcd.print("/2048Kb");
 				renderingStatics=true;
 			}
 			break;
