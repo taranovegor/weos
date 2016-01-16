@@ -1,5 +1,5 @@
 /*
-weOS ROM 0.8
+weOS ROM 0.8.1
 Board: Arduino UNO
 LCD: ILI9163C 1.44" 128x128
 <cl>DS1302s
@@ -16,7 +16,7 @@ LCD: ILI9163C 1.44" 128x128
 </cl>
 */
 #include <SPI.h>
-#include <MsTimer2.h>
+//#include <MsTimer2.h>
 #include <EEPROM.h>
 #include <MemoryFree.h>
 #include <TFT_ILI9163C.h>
@@ -40,7 +40,7 @@ LCD: ILI9163C 1.44" 128x128
 #define up 3//to 3
 #define down 4
 //Прочее (digital)
-#define bluetoothPower 7
+#define bluetoothPower 3
 //Прочее (digital ШИМ)
 #define vibration 5//3old
 #define backlight 9
@@ -93,11 +93,14 @@ const char* namesMonths[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "A
 const byte daysinMonths[13] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
 /*Для работы с будильником*/
-boolean alarmSet;//Установлен ли будильник true - да, false - нет
+boolean alarmStatus;//Установлен ли будильник true - да, false - нет
 byte vibrationCycle;//Цикл вибрации, на ноль есть действие, так что нужно обнулять
 const byte vibrationMode[] = {100, 125, 150, 175, 200, 225, 250};
 byte alarmMinute;
 byte alarmHour;
+
+/*bluetooth*/
+boolean bluetoothStatus = false;
 
 /*Переменные для работы с EEPROM (память)*/
 /*Адреса*/
@@ -143,117 +146,147 @@ boolean serviceWork = false;//Работа какого то сервиса ко
 /*Переменные для работы меню/c меню*/
 //Основа построения меню была взята с geektimes.ru
 //http://geektimes.ru/post/255408/
-char* MenuName[15];//Имя меню
+char* MenuName[21];//Имя меню
 //MenuType = 0;// - циферблат
 //MenuType = 1;// - стандартное меню с дочерними элементами
 //MenuType = 2;// - элементы БЕЗ дочерних элементов
-byte MenuType[15];//Тип меню
-byte MenuParent[15];//Родитель меню
-byte MenuChildFirst[15];//Первый потомок
-byte MenuChildLast[15];//Последний потомок
+byte MenuType[21];//Тип меню
+byte MenuParent[21];//Родитель меню
+byte MenuChildFirst[21];//Первый потомок
+byte MenuChildLast[21];//Последний потомок
 /**Переменные для работы навигации в меню**/
 unsigned int MenuLevel = 0;//Уровень меню (от ok, back)
 byte MenuCurPos = 0;//Текущее положение курсора (от up, down)
 
 /*Заполнение меню*/
 void MenuSetup(){
-	/*
-	MenuName[]="";
-	MenuType[]=;
-	MenuParent[]=;
-	MenuChildFirst[]=;
-	MenuChildLast[]=;
-	*/
+	//max-type=8;(status)
 	//Циферблат
 	MenuName[0]="";
 	MenuType[0]=0;
 	MenuParent[0]=0;
 	MenuChildFirst[0]=1;
 	MenuChildLast[0]=1;
-
+	//menu
 	MenuName[1]="Menu";
 	MenuType[1]=1;
 	MenuParent[1]=0;
 	MenuChildFirst[1]=2;
-	MenuChildLast[1]=5;
+	MenuChildLast[1]=6;
 
-	MenuName[2]="Clock";
+	MenuName[2]="Alarm";
 	MenuType[2]=1;
 	MenuParent[2]=1;
-	MenuChildFirst[2]=6;
-	MenuChildLast[2]=8;
+	MenuChildFirst[2]=7;
+	MenuChildLast[2]=9;
 
-	MenuName[3]="Screen";
+	MenuName[3]="Clock";
 	MenuType[3]=1;
 	MenuParent[3]=1;
 	MenuChildFirst[3]=10;
 	MenuChildLast[3]=11;
 
-	MenuName[4]="Bluetooth";
-	MenuType[4]=2;
+	MenuName[4]="Screen";
+	MenuType[4]=1;
 	MenuParent[4]=1;
-	MenuChildFirst[4]=0;
-	MenuChildLast[4]=0;
+	MenuChildFirst[4]=13;
+	MenuChildLast[4]=14;
 
-	MenuName[5]="Device";
+	MenuName[5]="Bluetooth";
 	MenuType[5]=1;
 	MenuParent[5]=1;
-	MenuChildFirst[5]=12;
-	MenuChildLast[5]=14;
+	MenuChildFirst[5]=15;
+	MenuChildLast[5]=17;
 
-	MenuName[6]="Alarm";
-	MenuType[6]=7;
-	MenuParent[6]=2;
-	MenuChildFirst[6]=0;
-	MenuChildLast[6]=0;
-
-	MenuName[7]="Time";
-	MenuType[7]=5;
+	MenuName[6]="Device";
+	MenuType[6]=1;
+	MenuParent[6]=1;
+	MenuChildFirst[6]=18;
+	MenuChildLast[6]=20;
+	//Alarm child 7-9
+	MenuName[7]="Status";
+	MenuType[7]=8;
 	MenuParent[7]=2;
 	MenuChildFirst[7]=0;
 	MenuChildLast[7]=0;
 
-	MenuName[8]="Date";
-	MenuType[8]=6;
+	MenuName[8]="Time";
+	MenuType[8]=5;
 	MenuParent[8]=2;
 	MenuChildFirst[8]=0;
 	MenuChildLast[8]=0;
 
-	MenuName[9]="Clock Face";
-	MenuType[9]=1;
+	MenuName[9]="Date";
+	MenuType[9]=6;
 	MenuParent[9]=2;
 	MenuChildFirst[9]=0;
 	MenuChildLast[9]=0;
-
-	MenuName[10]="Brightness";
-	MenuType[10]=4;
+	//Clock child 10-12(dntactive)
+	MenuName[10]="Time";
+	MenuType[10]=5;
 	MenuParent[10]=3;
 	MenuChildFirst[10]=0;
 	MenuChildLast[10]=0;
 
-	MenuName[11]="Backlight";
-	MenuType[11]=3;
+	MenuName[11]="Date";
+	MenuType[11]=6;
 	MenuParent[11]=3;
-	//MenuChildFirst[11]=;
-	//MenuChildLast[11]=;
+	MenuChildFirst[11]=0;
+	MenuChildLast[11]=0;
 
-	MenuName[12]="Battery";
-	MenuType[12]=2;
-	MenuParent[12]=5;
+	MenuName[12]="Clock Face";
+	MenuType[12]=1;
+	MenuParent[12]=3;
 	MenuChildFirst[12]=0;
 	MenuChildLast[12]=0;
-
-	MenuName[13]="Reboot";
-	MenuType[13]=2;
-	MenuParent[13]=5;
+	//Screen child 13-14
+	MenuName[13]="Brightness";
+	MenuType[13]=4;
+	MenuParent[13]=4;
 	MenuChildFirst[13]=0;
 	MenuChildLast[13]=0;
 
-	MenuName[14]="Information";
-	MenuType[14]=2;
-	MenuParent[14]=5;
+	MenuName[14]="Backlight";
+	MenuType[14]=3;
+	MenuParent[14]=4;
 	MenuChildFirst[14]=0;
 	MenuChildLast[14]=0;
+	//Bluetooth child 15-17
+	MenuName[15]="Status";
+	MenuType[15]=8;
+	MenuParent[15]=5;
+	MenuChildFirst[15]=0;
+	MenuChildLast[15]=0;
+
+	MenuName[16]="Sync";
+	MenuType[16]=8;//?
+	MenuParent[16]=5;
+	MenuChildFirst[16]=0;
+	MenuChildLast[16]=0;
+
+	MenuName[17]="Information";
+	MenuType[17]=1;
+	MenuParent[17]=5;
+	MenuChildFirst[17]=0;
+	MenuChildLast[17]=0;
+	//Device child 18-20
+	MenuName[18]="Battery";
+	MenuType[18]=2;
+	MenuParent[18]=6;
+	MenuChildFirst[18]=0;
+	MenuChildLast[18]=0;
+
+	MenuName[19]="Reboot";
+	MenuType[19]=2;
+	MenuParent[19]=6;
+	MenuChildFirst[19]=0;
+	MenuChildLast[19]=0;
+
+	MenuName[20]="Information";
+	MenuType[20]=2;
+	MenuParent[20]=6;
+	MenuChildFirst[20]=0;
+	MenuChildLast[20]=0;
 }
 
 /*Добавление секунд (для MsTimer2)*/
@@ -336,7 +369,7 @@ void DigitalClockFace(){
 		//
 		lcd.setCursor(66,78);
 		//lcd.print(analogRead(0));
-		if(alarmSet) lcd.print("@");
+		if(alarmStatus) lcd.print("@");
 		/*if(voltage>=4.0){
 			lcd.setTextColor(GREEN);
 			lcd.print("{");
@@ -599,7 +632,7 @@ void AlarmSettings(){
 
 /*Будильник*/
 void AlarmClock(){
-	if(time(4)==alarmHour&&time(5)==alarmMinute&&alarmSet&&MenuType[MenuLevel]!=7){
+	if(time(4)==alarmHour&&time(5)==alarmMinute&&alarmStatus&&MenuType[MenuLevel]!=7){
 		if(vibrationCycle==0){
 			lcd.clearScreen();
 			lcd.setTextSize(1);
@@ -619,7 +652,7 @@ void AlarmClock(){
 			lcd.clearScreen();
 			analogWrite(5,0);
 			vibrationCycle=0;
-			alarmSet=false;
+			alarmStatus=false;
 			serviceWork=false;
 			printDates=false;
 			renderingStatics=false;
@@ -629,7 +662,7 @@ void AlarmClock(){
 			analogWrite(5,0);//Выключаем вибромотор
 			alarmMinute+=5;
 			vibrationCycle=0;//Обнуляем ибо словим проблему в будущем
-			alarmSet=true;//Будильник установлен снова
+			alarmStatus=true;//Будильник установлен снова
 			serviceWork=false;//Сервис прерывающий прочие программы отключен
 			printDates=false;//Даём комманды на то что даты не отрисованы, нужно перерисовать
 			renderingStatics=false;//Отрисовка статики не выполнена
@@ -640,16 +673,32 @@ void AlarmClock(){
 			analogWrite(5, vibrationMode[vibrationCycle-1]);
 		}
 	}
-	else if(time(4)==alarmHour&&time(5)==alarmMinute+1&&alarmSet&&serviceWork){//если на 1 минуту раньше поставить будильник не ставит, юзаю serviceWork
+	else if(time(4)==alarmHour&&time(5)==alarmMinute+1&&alarmStatus&&serviceWork){//если на 1 минуту раньше поставить будильник не ставит, юзаю serviceWork
 		lcd.clearScreen();//Очищаем дисплей
 		analogWrite(5,0);//Выключаем вибромотор
 		alarmMinute+=5;
 		vibrationCycle=0;//Обнуляем ибо словим проблему в будущем
-		alarmSet=true;//Будильник установлен снова
+		alarmStatus=true;//Будильник установлен снова
 		serviceWork=false;//Сервис прерывающий прочие программы отключен
 		printDates=false;//Даём комманды на то что даты не отрисованы, нужно перерисовать
 		renderingStatics=false;//Отрисовка статики не выполнена
 	}
+}
+
+/*Настройка статуса*/
+boolean StatusSettings(boolean currentStatus, boolean change = false){
+	lcd.setCursor(55,1);//+8px padding
+	if(change){
+		lcd.setTextColor(BLACK);
+		if(currentStatus) lcd.print("on");
+		else lcd.print("off");
+		currentStatus=!currentStatus;
+		lcd.setCursor(55,1);
+		lcd.setTextColor(WHITE);
+	}
+	if(currentStatus) lcd.print("on");
+	else lcd.print("off");
+	if(change) return currentStatus;
 }
 
 /*Функция подсчёта питающего напряжения*/
@@ -787,10 +836,8 @@ void(* resetFunc) (void) = 0;
 
 void setup(){
 	/*Таймер*/
-	MsTimer2::set(993, timerSeconds);
-	MsTimer2::start();
-	/*Установка Serial*/
-	Serial.begin(9600);
+	//MsTimer2::set(993, timerSeconds);
+	//MsTimer2::start();
 	//Аналоговые
 	pinMode(A0, INPUT);
 	pinMode(A1, INPUT);
@@ -818,7 +865,7 @@ void setup(){
 	seconds=50;
 	/*Установка значений из памяти*/
 	//Яркость
-	analogReference(INTERNAL);
+	analogReference(DEFAULT);
 	/*Установка переменных*/
 	//Фиксированные даты
 	dayFixed=time(2);
@@ -829,10 +876,10 @@ void setup(){
 	loopTime = currentTime;
 	voltageTime = currentTime;
 	//Прочие перменные
-	alarmSet=false;
+	alarmStatus=false;
 	/*Выполнение функций*/
 	MenuSetup();
-	readVcc();
+	//readVcc();
 	delay(1);
 	/*Инциализация дисплея*/
 	lcd.begin();
@@ -840,6 +887,7 @@ void setup(){
 }
 
 void loop(){
+	//digitalWrite(bluetoothPower, HIGH);
 	//powerSaveMode();
 	//Обновляем текущее время
 	currentTime = millis()/100;
@@ -850,7 +898,7 @@ void loop(){
 	time(255);
 	if(currentTime>=voltageTime+600){//раз в ~60секунд пересчитывать напряжение
 		voltageTime=currentTime;
-		readVcc();
+		//readVcc();
 	}
 
 	bluetooth();///////////////////////////TEST
@@ -947,7 +995,7 @@ void loop(){
 				settingStep++;
 				lcd.drawFastHLine(43, 72, 42, BLACK);
 				if(settingStep>1){
-					alarmSet=true;
+					alarmStatus=true;
 					EEPROM.write(ACMinute, alarmMinute);
 					EEPROM.write(ACHour, alarmHour);
 					MenuCurPos=MenuLevel-MenuChildFirst[MenuParent[MenuLevel]];
@@ -957,6 +1005,21 @@ void loop(){
 				}
 				break;
 			default://Если не удовлетворяет (обычное меню)
+				if(MenuType[MenuChildFirst[MenuLevel]+MenuCurPos]==8){//Не выполняем программу если MenuType=8, так как StatusSettings(Костыль)
+					if(MenuLevel==2) alarmStatus=StatusSettings(alarmStatus, true);
+					else if(MenuLevel==5){
+						bluetoothStatus=StatusSettings(bluetoothStatus, true);
+						if(bluetoothStatus){
+							Serial.begin(9600);//инциализация Serial
+							analogWrite(bluetoothPower, 255);//Включение bt
+						}
+						else{
+							analogWrite(bluetoothPower, 0);//Выключение bt
+							Serial.end();//закрытие Serial
+						}
+					}
+					return;
+				}
 				MenuLevel=MenuChildFirst[MenuLevel]+MenuCurPos;
 				MenuCurPos=0;
 				lcd.clearScreen();
@@ -1216,6 +1279,18 @@ void loop(){
 				break;
 		}
 	}
+	//Костыль
+	if(MenuType[MenuChildFirst[MenuLevel]]==8){
+		switch(MenuLevel){
+			case 2:
+				StatusSettings(alarmStatus);
+				break;
+			case 5:
+				StatusSettings(bluetoothStatus);
+				break;
+		}
+	}
+	//Использование функции по типу меню
 	switch(MenuType[MenuLevel]){
 		case 0://Часы
 			DigitalClockFace();
@@ -1239,26 +1314,17 @@ void loop(){
 		case 7:
 			AlarmSettings();
 			break;
+		/*case 8:
+			StatusSettings(true);
+			break;*/
 	}
-	//
+	//Использование функций по MenuLevel
 	switch(MenuLevel){
-		case 2:
-			if(alarmSet==true){
-				lcd.setCursor(45,6);
-				lcd.print("°");
-			}
-			break;
-		case 4:
-			renderingStatics=false;
-			MenuCurPos=MenuLevel-MenuChildFirst[MenuParent[MenuLevel]];
-			MenuLevel=MenuParent[MenuLevel];
-			lcd.clearScreen();
-			break;
-		case 13:
+		case 19:
 			analogWrite(backlight, 0);
 			resetFunc();
 			break;
-		case 14:
+		case 20:
 			if(!renderingStatics){
 				lcd.setCursor(26,0);
 				lcd.setTextSize(1);
@@ -1266,7 +1332,7 @@ void loop(){
 				lcd.setCursor(2,16);
 				lcd.print("ROM version");
 				lcd.setCursor(2,32);
-				lcd.print("0.8 beta");
+				lcd.print("0.8.1 beta");
 				lcd.setCursor(2,48);
 				lcd.print("SOC");
 				lcd.setCursor(2,64);
