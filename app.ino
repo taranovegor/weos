@@ -1,5 +1,5 @@
 /*
-weOS ROM 0.9
+weOS ROM 0.9.1
 Board: Arduino UNO
 LCD: ILI9163C 1.44" 128x128
 <cl>DS1302s
@@ -38,15 +38,15 @@ LCD: ILI9163C 1.44" 128x128
 
 /*Выходы*/
 //Кнопки (analog)
-#define back 5
+#define back 1
 #define ok 2
 #define up 3//to 3
 #define down 4
 //Прочее (digital)
-#define bluetoothPower 2
+#define bluetoothPower 9
 //Прочее (digital ШИМ)
 #define vibration 3//3old
-#define backlight 9
+#define backlight 5
 /*
 ---|Buttons pin's
 back 1	up 3
@@ -69,8 +69,8 @@ backlight (__LED) 9
 #define __RST 8
 
 #define __CE  7 //RST
-#define __IO  5 //I/0
-#define __CLK 4 //SCLK
+#define __IO  4 //I/0
+#define __CLK 2 //SCLK
 
 
 /*Установка пинов для экрана*/
@@ -620,9 +620,11 @@ boolean bluetoothStatusChange(boolean status){
 	if(status){
 		Serial.begin(9600);
 		//analogWrite(bluetoothPower, 255);
+		digitalWrite(bluetoothPower, HIGH);
 	}
 	else{
 		//analogWrite(bluetoothPower, 0);//Выключение bt
+		digitalWrite(bluetoothPower, LOW);
 		Serial.end();//закрытие Serial
 	}
 	bluetoothStatus=status;
@@ -689,7 +691,7 @@ void AlarmClock(){
 	}
 }
 
-int btBuffer;
+/*int btBuffer;
 int btData[2] = {0, 0};//2, 4, 8, 16, ...
 byte btDataCycle = 0;
 byte btDataLen = 0;
@@ -719,6 +721,112 @@ void bluetooth(){
 
 void btHandler(){
 
+}*/
+
+int btBuffer;
+int btData[2] = {0, 0};//2, 4, 8, 16, ...
+byte btDataCycle = 0;
+byte btDataLen = 0;
+
+/**/
+void bluetooth(){
+	if(Serial.available()){
+		btBuffer=Serial.read();
+		switch(btBuffer){
+			case 35:// '#'
+				Serial.print("minutes:1\n\rhours:2\n\rday:3\n\rwd:4\n\rmnt:5\n\r");
+				break;
+			/*case 37:// '%' - voltage
+				Serial.print("\nVoltage:");
+				Serial.println(voltage);
+				break;
+			case 33:
+				Serial.println(hourFixed);
+				Serial.print(":");
+				Serial.println(minuteFixed);
+				break;
+			case 63:
+				Serial.println(hours);
+				Serial.print(":");
+				Serial.println(minutes);
+				break;
+			case 46://'.'
+				btDataCycle++;
+				btDataLen=0;
+				break;
+			case 59://Если передан символ ';' означающий конец комманды
+				btBuffer=0;
+				btDataCycle=0;
+				btDataLen=0;
+				//btHandler=true;
+				Serial.print("SETTING TRANSFERRED\n\r");
+				Serial.println(btData[0]);
+				Serial.print(".");
+				Serial.println(btData[1]);
+				btRequestHandler();
+				break;*/
+			default:
+				if(btDataLen==0){
+					btData[btDataCycle]=ASCII(btBuffer);
+				}
+				else{
+					btData[btDataCycle]=btData[btDataCycle]*10+ASCII(btBuffer);
+				}
+				btDataLen++;
+				break;
+		}
+	}
+}
+
+/*Обработчик блютуз-запросов*/
+void btRequestHandler(){
+	switch(btData[0]){
+		/*case 1:
+			EEPROM.write(minuteAddress,btData[1]);
+			minutes=btData[1];
+			btData[1]=0;
+		break;
+		case 2:
+			EEPROM.write(hourAddress,btData[1]);
+			hours=btData[1];
+			btData[1]=0;
+		break;
+		case 3:
+			EEPROM.write(dayAddress,btData[1]);
+			day=btData[1];
+			btData[1]=0;
+			printDates=false;
+			break;
+		case 4:
+			EEPROM.write(numWeekDayAddress,btData[1]);
+			numWeekDay=btData[1];
+			btData[1]=0;
+			printDates=false;
+			break;
+		case 5:
+			EEPROM.write(monthAddress,btData[1]);
+			month=btData[1];
+			btData[1]=0;
+			printDates=false;
+			break;*/
+	}
+}
+
+/*Функция перевода цифровых символов из ASCII понятную систему*/
+byte ASCII(byte arg){
+	switch(arg){
+		case 48: return 0;
+		case 49: return 1;
+		case 50: return 2;
+		case 51: return 3;
+		case 52: return 4;
+		case 53: return 5;
+		case 54: return 6;
+		case 55: return 7;
+		case 56: return 8;
+		case 57: return 9;
+		default: return arg;
+	}
 }
 
 /*Функция подсчёта питающего напряжения*/
@@ -777,11 +885,14 @@ void setup(){
 	alarmStatus=false;//Будильник выкл
 	/*Выполнение функций*/
 	MenuSetup();//Загружаем меню
-	bluetoothStatusChange(false);//Отвключаем блютуз
+	//bluetoothStatusChange(false);//Отвключаем блютуз
+	Serial.begin(9600);
+	analogWrite(bluetoothPower, 0);
+	//
 	delay(1);
 	/*Инциализация дисплея*/
 	lcd.begin();
-	//lcd.setRotation(2);
+	lcd.setRotation(2);
 	lcd.invertDisplay(false);
 	delay(1);
 	//Установка яркости
@@ -798,7 +909,7 @@ void loop(){
 	AlarmClock();
 	/*Если есть сервисная работа - отменяем выполнение программы*/
 	if(serviceWork==true) return;
-	//bluetooth();
+	bluetooth();
 	/*Установка таймеров кнопки*/
 	switch(MenuType[MenuLevel]){
 		case 4: TimerButton = 3; break;
@@ -877,7 +988,17 @@ void loop(){
 					switch(MenuLevel){
 						case 2: alarmStatus=statusSettings(alarmStatus, true); break;
 						//case 4: statusSettings(alarmStatus, true); break;
-						case 5: bluetoothStatus=statusSettings(bluetoothStatusChange(bluetoothStatus), true); break;
+						case 5:
+							bluetoothStatus=statusSettings(bluetoothStatus, true);
+							if(bluetoothStatus){
+								analogWrite(bluetoothPower, 255);
+								Serial.begin(9600);
+							}
+							else{
+								Serial.end();
+								analogWrite(bluetoothPower, 0);
+							}
+						break;
 					}
 					return;
 				}
@@ -1175,7 +1296,7 @@ void loop(){
 				lcd.setCursor(2,16);
 				lcd.print("ROM version");
 				lcd.setCursor(2,32);
-				lcd.print("0.9 beta");
+				lcd.print("0.9.1 beta");
 				lcd.setCursor(2,48);
 				lcd.print("SOC");
 				lcd.setCursor(2,64);
