@@ -43,3 +43,18 @@ System for wristwatches based on Arduino
 ## Documents
 - [`Статистика.xlsx` — electricity consumption information.](docs/Статистика.xlsx)
 - [`Яркость.docx` — measurements of electricity consumption depending on screen brightness.](docs/Яркость.docx)
+
+## 3D Model
+The 3D models was developed using the [Компас-3D](https://kompas.ru/).
+
+[`wclock_body.m3d`](model/wclock_body.m3d), [view on Sketchfab](https://skfb.ly/oKZsR)
+![wClock — body (front side)](model/wclock_body_front.jpg)
+![wClock — body (back side)](model/wclock_body_back.jpg)
+[`wclock_back_cover.m3d`](model/wclock_back_cover.m3d), [view on Sketchfab](https://skfb.ly/oKZsX)
+![wClock — back cover (front side)](model/wclock_back_cover_front.jpg)
+![wClock — back cover (back side)](model/wclock_back_cover_back.jpg)
+[`wclock_buttons.m3d`](model/wclock_buttons.m3d), [view on Sketchfab](https://skfb.ly/oKZtq)
+![wClock — buttons](model/wclock_buttons.jpg)
+
+## Schematic & Layout Design
+I couldn't find the files, I think they were lost 😢. All that remains is a photo of the developed printed circuit board. As far as I know, it was developed in [DipTrace](https://diptrace.com/) or Sprint Layout.
