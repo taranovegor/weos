@@ -52,3 +52,11 @@ https://github.com/taranovegor/weos/assets/16158349/399b4208-973d-4a9d-b4e7-a4df
 
 `06 Oct 2017`
 ![2017-10-06 23:33:24.jpg](IMG_20171006_233324_1.jpg)
+
+## Other
+
+`08 Apr 2018`
+![IMG_20180408_1.jpeg](IMG_20180408_1.jpeg)
+![IMG_20180408_2.jpeg](IMG_20180408_2.jpeg)
+![IMG_20180408_3.jpeg](IMG_20180408_3.jpeg)
+![IMG_20180408_4.jpeg](IMG_20180408_4.jpeg)
