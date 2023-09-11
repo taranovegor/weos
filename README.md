@@ -1,9 +1,47 @@
 # weOS
 System for wristwatches based on Arduino
 
-[Prototyping photos](pics/README.md)
+This repository contains nothing more than children's creativity 🙂.
+The development was carried out in 2015-2017 and its goal was a cheap alternative to electronic wristwatches.
+
+The project was brought to a working prototype, but without a body, since it was not possible to obtain a satisfactory printing result.
+
+Later, more advanced components were purchased for the project, and it was decided to refactor the existing source code, but due to lack of time, the project remained at the idea stage.
+
+[Prototyping photos](pics/README.md) available.
+
+## Branches
+- [clock-face](https://github.com/taranovegor/weos/tree/clock-face) — pre-development of watch dial.
+- [debug](https://github.com/taranovegor/weos/tree/debug) — various debugging scripts created during the development process.
+- [v2](https://github.com/taranovegor/weos/tree/v2) — complete rethink of the code base.
+- [menu](https://github.com/taranovegor/weos/tree/menu) — menu library development.
 
 ## Device information
+### Technical specification
+#### v0 — based on [Arduino Uno](https://docs.arduino.cc/hardware/uno-rev3)
+| Component | Model name                   |
+|-----------|------------------------------|
+| CPU       | Atmega328P                   |
+| Screen    | PCD8544 (1.6" 84*48 B/W LCD) |
+#### v1 — based on [Arduino Uno](https://docs.arduino.cc/hardware/uno-rev3)
+| Component | Model name                           |
+|-----------|--------------------------------------|
+| CPU       | Atmega328P                           |
+| Clock     | DS1302                               |
+| Screen    | ILI9163C (1.44" 128*128px Color LCD) |
+| Bluetooth | HC-05                                |
+| Vibration | similar to Nokia 3310                |
+| Battery   | 260mAh                               |
+#### v2 — based on [Teensy 3.2](https://www.pjrc.com/store/teensy32.html)
+| Component     | Model name                              |
+|---------------|-----------------------------------------|
+| CPU           | MK20DX256VLH7 (ARM Cortex-M4 at 72 MHz) |
+| Screen        | SSD1327 (1.5" 128*128px Color OLED)     |
+| Bluetooth     | JDY-08 BLE                              |
+| Accelerometer | GY-61                                   |
+| Vibration     | similar to iPhone 4                     |
+| Battery       | 260mAh (planned 300-320mAh)             |
+
 ### Electricity consumption information
 | Consumer                        | 3.7V  | 5V  |
 |---------------------------------|-------|-----|
@@ -40,9 +78,24 @@ System for wristwatches based on Arduino
 | 100            | 14.51             | N/A              |
 | Avg            | 11.05             | N/A              |
 
+## Used libraries
+- [Adafruit_GFX](https://github.com/adafruit/Adafruit-GFX-Library)
+- [Adafruit_PCD8544](https://github.com/adafruit/Adafruit-PCD8544-Nokia-5110-LCD-library)
+- [TFT_ILI9163C](https://github.com/sumotoy/TFT_ILI9163C) ❤️
+- [MsTimer2](https://github.com/PaulStoffregen/MsTimer2)
+- [MemoryFree](https://github.com/sudar/MemoryFree)
+- [DS1302](https://github.com/Treboada/Ds1302)
+- [HC05](https://github.com/jdunmire/HC05)
+- [SSD_13XX](https://github.com/sumotoy/SSD_13XX)
+
 ## Documents
-- [`Статистика.xlsx` — electricity consumption information.](docs/Статистика.xlsx)
-- [`Яркость.docx` — measurements of electricity consumption depending on screen brightness.](docs/Яркость.docx)
+- [`Статистика.xlsx`](docs/Статистика.xlsx) — electricity consumption information.
+- [`Яркость.docx`](docs/Яркость.docx) — measurements of electricity consumption depending on screen brightness.
+- [`hm-11_bluetooth40_en.pdf`](docs/hm-11_bluetooth40_en.pdf)  — documentation for bluetooth modules HM series.
+- [`ordered.csv`](docs/ordered.csv)  — list of ordered parts.
+
+## Schematic & Layout Design
+I couldn't find the files, I think they were lost 😢. All that remains is a photo of the developed printed circuit board. As far as I know, it was developed in [DipTrace](https://diptrace.com/) or Sprint Layout.
 
 ## 3D Model
 The 3D models was developed using the [Компас-3D](https://kompas.ru/).
@@ -56,5 +109,6 @@ The 3D models was developed using the [Компас-3D](https://kompas.ru/).
 [`wclock_buttons.m3d`](model/wclock_buttons.m3d), [view on Sketchfab](https://skfb.ly/oKZtq)
 ![wClock — buttons](model/wclock_buttons.jpg)
 
-## Schematic & Layout Design
-I couldn't find the files, I think they were lost 😢. All that remains is a photo of the developed printed circuit board. As far as I know, it was developed in [DipTrace](https://diptrace.com/) or Sprint Layout.
+## Special thanks
+- To my father for his support and help.
+- For [sumotoy](https://github.com/sumotoy) for really cool libraries for displays.
